@@ -115,9 +115,32 @@ def get_sheet(provider):
     return SHEETS.get(provider)
 
 
-def waste_dollars(waste_tokens, provider):
+def apply_overrides(overrides):
+    """Merge user-supplied pricing overrides over the recorded sheets.
+
+    overrides: {provider: {field: value}} — e.g.
+      {"deepseek": {"miss_per_mtok": 0.20, "hit_per_mtok": 0.004}}
+    Unknown providers may be added outright. Returns the merged dict
+    (a copy; the recorded SHEETS are not mutated).
+    """
+    import copy
+    merged = copy.deepcopy(SHEETS)
+    for provider, fields in (overrides or {}).items():
+        if not isinstance(fields, dict):
+            raise ValueError(f"pricing override for {provider!r} must be an object")
+        base = merged.get(provider, {})
+        base.update(fields)
+        merged[provider] = base
+    return merged
+
+
+def get_sheet_from(sheets, provider):
+    return sheets.get(provider)
+
+
+def waste_dollars(waste_tokens, provider, sheets=None):
     """Price waste tokens at the miss rate. Returns None if no sheet."""
-    sheet = get_sheet(provider)
+    sheet = (sheets or SHEETS).get(provider)
     if sheet is None:
         return None
     return waste_tokens / 1e6 * sheet["miss_per_mtok"]

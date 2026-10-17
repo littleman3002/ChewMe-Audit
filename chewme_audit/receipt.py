@@ -24,10 +24,11 @@ def _canonical(obj):
                       ensure_ascii=False)
 
 
-def issue(finding, provider, priced=True):
-    dollars = (pricing.waste_dollars(finding.waste_tokens, provider)
+def issue(finding, provider, priced=True, sheets=None):
+    sheets = sheets or pricing.SHEETS
+    dollars = (pricing.waste_dollars(finding.waste_tokens, provider, sheets)
                if priced else None)
-    sheet = pricing.get_sheet(provider)
+    sheet = sheets.get(provider)
     body = {
         "receipt_id": uuid.uuid4().hex,
         "issued_at": datetime.now(timezone.utc).isoformat(),
@@ -57,5 +58,5 @@ def verify(receipt):
     return hashlib.sha256(_canonical(body).encode("utf-8")).hexdigest() == given
 
 
-def issue_all(findings, provider, priced=True):
-    return [issue(f, provider, priced) for f in findings if f.measurable]
+def issue_all(findings, provider, priced=True, sheets=None):
+    return [issue(f, provider, priced, sheets) for f in findings if f.measurable]

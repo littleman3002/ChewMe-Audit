@@ -59,6 +59,14 @@ python -m chewme_audit.cli my_traces.jsonl --provider deepseek \
 # JSON output, framework-specific fixes, tamper-evident receipts:
 python -m chewme_audit.cli my_traces.jsonl --provider grok \
     --output json --framework langchain --receipt --out audit.json
+
+# Override pricing (file or inline JSON, merged over recorded sheets):
+python -m chewme_audit.cli my_traces.jsonl --provider deepseek \
+    --pricing '{"deepseek": {"miss_per_mtok": 0.20}}'
+
+# OPT-IN: illustrative total-bill share (assumes outputs ~50% of bill).
+# Off by default so nobody quotes it without the label:
+python -m chewme_audit.cli my_traces.jsonl --provider deepseek --total-bill
 ```
 
 For provider-token counts (billed-token basis instead of the chars/4
@@ -83,8 +91,10 @@ CHEWME_LAB=~/workspace/tokenizer-lab \
 ## What the report contains
 
 - **Headline:** measurable waste in tokens and dollars, share of input
-  spend, illustrative share of total bill — each labeled estimated or
-  measured.
+  spend — each labeled estimated or measured. The total-bill share is
+  **opt-in only** (`--total-bill`): it's illustrative (assumes outputs
+  ~50% of bill), so it's off by default rather than quoted without its
+  label.
 - **Prioritized findings:** every waste instance by dollar impact, with
   the evidence (repetition counts, similarity scores, diff hints).
 - **Recommended fixes:** copy-paste snippets for your framework
@@ -100,9 +110,16 @@ CHEWME_LAB=~/workspace/tokenizer-lab \
 Recorded sheets (re-verify before quoting): `deepseek-flash` —
 miss $0.15/M, hit $0.003/M, out $0.60/M (peak windows 01:00–04:00 and
 06:00–10:00 UTC Mon–Fri ×2); `grok-4.20-0309` — in $1.25/M, cached
-$0.20/M, out $2.50/M. Waste is priced at the cache-**miss** rate:
+$0.20/M, out $2.50/M; `claude-sonnet-5` — miss $2.00/M, hit $0.20/M,
+out $10.00/M; `gpt-5.6-sol` — miss $4.00/M, hit $0.40/M, out $20.00/M
+(promo through 2026-11-21); `gemini-3.8-flash` — miss $0.75/M,
+hit $0.075/M, out $3.75/M. Waste is priced at the cache-**miss** rate:
 measured on benchmark trajectories, waste spans are 100% cache misses
 (duplicates at new positions can't hit under prefix caching).
+
+Sheets are hardcoded and will drift — override any rate with
+`--pricing` (JSON file or inline), which merges over the recorded
+sheets without touching the repo.
 
 ## Tests
 
@@ -121,3 +138,18 @@ nebius SWE-agent set, deliberately the heaviest-waste tail (that's why
 the sample report shows a high waste share; it is not representative).
 `traces/sample_api_log.jsonl` — synthetic demo API log for the sample
 traces (labeled `_synthetic` per record).
+
+`traces/sample_typical.jsonl` — 5 trajectories from the **middle
+quintile** of the same set (median waste share), for calibrating
+expectations: 27,947 waste tokens, 39.6% of input on deepseek. Still
+benchmark-trajectory waste — production agents loop less — but a fairer
+picture of what "a normal run" looks like than the heavy tail.
+
+## The `rust/` folder
+
+The deterministic Rust core from the earlier wrapper work, kept as a
+library: fidelity gate, collision handling, lexical rules. The CLI is
+pure Python and doesn't need it — it's the future performance path
+(byte-exact minify with real guarantees) and the home of the
+`pretty_printing` detector's "here's what minify would save you" line.
+See `rust/README.md`.

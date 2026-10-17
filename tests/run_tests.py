@@ -4,10 +4,11 @@ import sys
 import traceback
 
 import test_api_log
+import test_pricing
 import test_detectors
 
 passed = failed = 0
-for mod in (test_detectors, test_api_log):
+for mod in (test_detectors, test_api_log, test_pricing):
     for name in sorted(dir(mod)):
         if not name.startswith("test_"):
             continue

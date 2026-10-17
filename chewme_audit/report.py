@@ -4,8 +4,9 @@ Honesty rules (standing):
 - Benchmark-trajectory numbers stay labeled as such.
 - Dollar figures only on priceable token bases; otherwise tokens with
   the basis labeled and dollars null.
-- Total-bill share assumes outputs ~50% of the bill (illustrative,
-  labeled, not measured on the input traces).
+- Total-bill share is OPT-IN only (--total-bill): it assumes outputs
+  ~50% of the bill, which is illustrative, not measured. Off by default
+  so nobody quotes it without the label.
 - Unmeasurable classes appear as guidance, never with dollar figures.
 """
 
@@ -18,8 +19,9 @@ from . import fixes as fixlib
 
 
 def build(traces, findings_by_trace, provider, framework="generic",
-          api_log_records=None):
-    sheet = pricing.get_sheet(provider)
+          api_log_records=None, sheets=None, include_total_bill=False):
+    sheets = sheets or pricing.SHEETS
+    sheet = sheets.get(provider)
     total_input_tokens = 0
     total_waste_tokens = 0
     basis_seen = set()
@@ -60,11 +62,11 @@ def build(traces, findings_by_trace, provider, framework="generic",
         measured_input_dollars = total
         cache_accounting = "measured" if matched_requests else "estimated"
 
-    waste_dollars = (pricing.waste_dollars(total_waste_tokens, provider)
+    waste_dollars = (pricing.waste_dollars(total_waste_tokens, provider, sheets)
                      if priced else None)
     total_input_dollars = (measured_input_dollars if measured_input_dollars
                            is not None
-                           else (pricing.waste_dollars(total_input_tokens, provider)
+                           else (pricing.waste_dollars(total_input_tokens, provider, sheets)
                                  if priced else None))
 
     input_share = (total_waste_tokens / total_input_tokens
@@ -72,9 +74,10 @@ def build(traces, findings_by_trace, provider, framework="generic",
     # Dollar share of input spend (exact denominator when API logs present).
     input_dollar_share = (waste_dollars / total_input_dollars
                           if waste_dollars and total_input_dollars else None)
-    # Illustrative total-bill share: outputs ~50% of bill (labeled).
+    # Illustrative total-bill share: OPT-IN only (--total-bill).
     total_bill_share = (input_dollar_share / 2
-                        if input_dollar_share is not None else None)
+                        if (include_total_bill and
+                            input_dollar_share is not None) else None)
 
     by_detector = {}
     for f in measurable:
@@ -99,20 +102,26 @@ def build(traces, findings_by_trace, provider, framework="generic",
             round(input_dollar_share, 4) if input_dollar_share is not None else None),
         "waste_share_of_total_bill_illustrative": (
             round(total_bill_share, 4) if total_bill_share is not None else None),
+        "total_bill_included": include_total_bill,
         "cache_accounting": cache_accounting,
         "api_log_requests_matched": matched_requests,
         "by_detector": by_detector,
         "findings": findings,
         "framework": framework,
+        "_sheets": sheets,  # internal: per-finding dollar pricing; stripped from JSON output
         "labels": [
             "measured on the provided traces (not a benchmark claim)",
             "waste priced at cache-miss rate (waste spans are 100% cache misses, measured)",
             ("cache accounting: EXACT (from your API logs)"
              if cache_accounting == "measured" else
              "cache accounting: ESTIMATED (no API logs provided — hand it your API logs for exacts)"),
-            "total-bill share illustrative: assumes outputs ~50% of bill",
             "waste share is a lower bound: re-sends inflate every later request's prompt (superlinear), which this figure does not model",
-        ],
+        ] + ([
+            "total-bill share illustrative: assumes outputs ~50% of bill "
+            "(opt-in via --total-bill; do not quote without this label)",
+        ] if include_total_bill else [
+            "total-bill share omitted by default (illustrative; opt in with --total-bill)",
+        ]),
     }
 
 
@@ -143,8 +152,10 @@ def to_markdown(rep):
             L.append(f"- Share of input spend: "
                      f"**{rep['waste_share_of_input_dollars']:.1%}** "
                      f"({rep['cache_accounting']})")
-        L.append(f"- Share of total bill (illustrative, outputs ~50%): "
-                 f"**{rep['waste_share_of_total_bill_illustrative']:.1%}**")
+        if rep.get("total_bill_included"):
+            L.append(f"- Share of total bill (illustrative, outputs ~50% — "
+                     f"do not quote without this label): "
+                     f"**{rep['waste_share_of_total_bill_illustrative']:.1%}**")
     else:
         L.append(f"- Measurable waste: **{rep['total_waste_tokens']:,} tokens** "
                  f"(token basis `{', '.join(rep['token_basis'])}` — "
@@ -166,8 +177,9 @@ def to_markdown(rep):
     meas = [f for f in rep["findings"] if f.measurable]
     meas.sort(key=lambda f: -f.waste_tokens)
     priced = rep["dollars_shown"]
+    sheets = rep.get("_sheets")
     for f in meas[:50]:
-        dollars = (pricing.waste_dollars(f.waste_tokens, rep["provider"])
+        dollars = (pricing.waste_dollars(f.waste_tokens, rep["provider"], sheets)
                    if priced else None)
         dstr = f" (${dollars:.4f})" if dollars is not None else ""
         L.append(f"- **[{f.detector}]** {f.trace_id} step {f.step_idx}: "
@@ -216,7 +228,8 @@ def to_json(rep):
             "trace_id": f.trace_id,
             "step_idx": f.step_idx,
             "waste_tokens": f.waste_tokens,
-            "waste_dollars": (pricing.waste_dollars(f.waste_tokens, rep["provider"])
+            "waste_dollars": (pricing.waste_dollars(f.waste_tokens, rep["provider"],
+                                                   rep.get("_sheets"))
                               if rep["dollars_shown"] else None),
             "token_basis": f.token_basis,
             "summary": f.summary,
@@ -225,5 +238,6 @@ def to_json(rep):
             "measurable": f.measurable,
         }
     out = dict(rep)
+    out.pop("_sheets", None)
     out["findings"] = [_finding(f) for f in rep["findings"]]
     return json.dumps(out, indent=2)

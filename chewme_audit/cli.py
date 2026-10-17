@@ -19,7 +19,7 @@ import json
 import sys
 
 from . import api_log as api_log_mod
-from . import detectors, receipt as receipt_mod, report
+from . import detectors, pricing, receipt as receipt_mod, report
 from . import fixes as fixlib
 from .adapters import jsonl as jsonl_adapter
 from .adapters import langfuse as langfuse_adapter
@@ -34,13 +34,31 @@ def load_traces(path, fmt):
     return jsonl_adapter.load_jsonl(path)
 
 
+def load_pricing_overrides(spec):
+    """spec: path to a JSON file, or inline JSON like
+    '{"deepseek": {"miss_per_mtok": 0.20}}'. Merged over recorded sheets."""
+    if not spec:
+        return None
+    try:
+        with open(spec, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        pass
+    try:
+        return json.loads(spec)
+    except json.JSONDecodeError:
+        print(f"could not read --pricing as a file or JSON: {spec}",
+              file=sys.stderr)
+        sys.exit(2)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(
         prog="chewme-audit",
         description="Audit agent traces for fixable cost waste.")
     ap.add_argument("traces", help="trace file (JSONL, Langfuse or LangSmith export)")
     ap.add_argument("--provider", default="deepseek",
-                    help="deepseek (default) | grok | xai")
+                    help="deepseek | grok | xai | claude | anthropic | openai | gemini | google (default: deepseek)")
     ap.add_argument("--format", default="jsonl", dest="fmt",
                     choices=["jsonl", "langfuse", "langsmith"],
                     help="input format (default: jsonl)")
@@ -59,7 +77,18 @@ def main(argv=None):
                           "labeled estimated."))
     ap.add_argument("--out", default=None,
                     help="write report to file instead of stdout")
+    ap.add_argument("--pricing", default=None,
+                    help=("pricing overrides: path to a JSON file or inline "
+                          "JSON, e.g. '{\"deepseek\": {\"miss_per_mtok\": 0.20}}'. "
+                          "Merged over the recorded sheets; use it to re-verify "
+                          "or correct rates."))
+    ap.add_argument("--total-bill", action="store_true", dest="total_bill",
+                    help=("OPT-IN: include the illustrative total-bill share "
+                          "(assumes outputs ~50% of bill). Off by default so "
+                          "nobody quotes it without the label."))
     args = ap.parse_args(argv)
+
+    sheets = pricing.apply_overrides(load_pricing_overrides(args.pricing))
 
     traces = load_traces(args.traces, args.fmt)
     if not traces:
@@ -74,14 +103,15 @@ def main(argv=None):
         findings_by_trace[t.trace_id] = detectors.run_all(t, args.provider)
 
     rep = report.build(traces, findings_by_trace, args.provider,
-                       args.framework, api_log_records=api_records)
+                       args.framework, api_log_records=api_records,
+                       sheets=sheets, include_total_bill=args.total_bill)
 
     if args.receipt:
         payload = {
             "report": json.loads(report.to_json(rep)),
             "receipts": receipt_mod.issue_all(
                 [f for fs in findings_by_trace.values() for f in fs],
-                args.provider, priced=rep["dollars_shown"]),
+                args.provider, priced=rep["dollars_shown"], sheets=sheets),
         }
         text = json.dumps(payload, indent=2)
     elif args.output == "json":
