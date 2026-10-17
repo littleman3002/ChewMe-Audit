@@ -125,8 +125,14 @@ def build(traces, findings_by_trace, provider, framework="generic",
     }
 
 
-def to_markdown(rep):
+def to_markdown(rep, diff=None):
+    from . import diff as diffmod  # local import: diff.py imports report
     L = []
+    if diff is not None:
+        L.extend(diffmod.diff_markdown(diff))
+        L.append("")
+        L.append("---")
+        L.append("")
     L.append("# Agent cost audit")
     L.append("")
     L.append(f"Generated {rep['generated_at']} · provider `{rep['provider']}` "
@@ -221,7 +227,7 @@ def to_markdown(rep):
     return "\n".join(L)
 
 
-def to_json(rep):
+def to_json(rep, diff=None):
     def _finding(f):
         return {
             "detector": f.detector,
@@ -240,4 +246,6 @@ def to_json(rep):
     out = dict(rep)
     out.pop("_sheets", None)
     out["findings"] = [_finding(f) for f in rep["findings"]]
+    if diff is not None:
+        out["diff"] = diff
     return json.dumps(out, indent=2)

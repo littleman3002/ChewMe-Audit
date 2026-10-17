@@ -69,6 +69,33 @@ python -m chewme_audit.cli my_traces.jsonl --provider deepseek \
 python -m chewme_audit.cli my_traces.jsonl --provider deepseek --total-bill
 ```
 
+## Diff mode: prove the delta
+
+The complete loop — find → recommend fix → apply → prove it:
+
+```bash
+python -m chewme_audit.cli before.jsonl after.jsonl --diff --provider deepseek
+```
+
+All flags (`--provider`, `--format`, `--framework`, `--pricing`,
+`--api-log`, `--output`, `--out`) apply to both sides; `--api-log`
+applies the same log to both. Traces are matched by `trace_id` when
+both sides carry them, otherwise by order — unmatched traces are listed,
+never silently dropped.
+
+The Diff section answers three questions:
+
+1. **Net change** — waste and input spend, before → after, in tokens
+   and dollars, plus residual waste left.
+2. **What disappeared / shrank** — resolved and reduced classes with
+   the original detector and fix key.
+3. **What remains or got worse** — new and unchanged findings, so a
+   partial win never gets shipped as done.
+
+Fix keys surviving on both sides are re-surfaced with their snippet and
+a note that the fix wasn't fully applied (or the agent found a new way
+to loop).
+
 For provider-token counts (billed-token basis instead of the chars/4
 estimate), point `CHEWME_LAB` at the tokenizer lab and run under its
 venv:

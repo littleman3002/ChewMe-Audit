@@ -56,7 +56,12 @@ def main(argv=None):
     ap = argparse.ArgumentParser(
         prog="chewme-audit",
         description="Audit agent traces for fixable cost waste.")
-    ap.add_argument("traces", help="trace file (JSONL, Langfuse or LangSmith export)")
+    ap.add_argument("traces", nargs="+",
+                    help="trace file: one for audit, two (before after) with --diff")
+    ap.add_argument("--diff", action="store_true",
+                    help=("diff mode: compare two trace files (before.jsonl "
+                          "after.jsonl). All other flags apply to both sides; "
+                          "--api-log applies the same log to both."))
     ap.add_argument("--provider", default="deepseek",
                     help="deepseek | grok | xai | claude | anthropic | openai | gemini | google (default: deepseek)")
     ap.add_argument("--format", default="jsonl", dest="fmt",
@@ -74,7 +79,8 @@ def main(argv=None):
                     help=("provider API log (JSONL, per-request usage with "
                           "cache hit/miss). With it, dollar figures use EXACT "
                           "cache accounting; without it, every figure is "
-                          "labeled estimated."))
+                          "labeled estimated. In --diff mode the same log "
+                          "applies to both sides."))
     ap.add_argument("--out", default=None,
                     help="write report to file instead of stdout")
     ap.add_argument("--pricing", default=None,
@@ -90,7 +96,16 @@ def main(argv=None):
 
     sheets = pricing.apply_overrides(load_pricing_overrides(args.pricing))
 
-    traces = load_traces(args.traces, args.fmt)
+    if args.diff:
+        if len(args.traces) != 2:
+            ap.error("--diff needs exactly two trace files: "
+                     "before.jsonl after.jsonl")
+        return run_diff(args, sheets)
+
+    if len(args.traces) != 1:
+        ap.error("expected one trace file (two with --diff)")
+
+    traces = load_traces(args.traces[0], args.fmt)
     if not traces:
         print("no traces parsed from input", file=sys.stderr)
         return 1
@@ -118,6 +133,51 @@ def main(argv=None):
         text = report.to_json(rep)
     else:
         text = report.to_markdown(rep)
+
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as f:
+            f.write(text)
+    else:
+        print(text)
+    return 0
+
+
+def run_diff(args, sheets):
+    """Diff mode: audit before and after, then prove the delta."""
+    from . import diff as diffmod
+
+    before_traces = load_traces(args.traces[0], args.fmt)
+    after_traces = load_traces(args.traces[1], args.fmt)
+    if not before_traces or not after_traces:
+        print("no traces parsed from one of the inputs", file=sys.stderr)
+        return 1
+
+    api_records = (api_log_mod.load_api_log(args.api_log)
+                   if args.api_log else None)
+
+    rep_before, rep_after, diff_obj = diffmod.build_diff(
+        before_traces, after_traces, args.provider, args.framework,
+        api_log_records=api_records, sheets=sheets,
+        include_total_bill=args.total_bill)
+
+    if args.receipt:
+        # Receipts describe the current (after) state — the findings you
+        # can still act on.
+        after_findings = {}
+        for t in after_traces:
+            after_findings[t.trace_id] = detectors.run_all(t, args.provider)
+        payload = {
+            "report": json.loads(report.to_json(rep_after, diff=diff_obj)),
+            "receipts": receipt_mod.issue_all(
+                [f for fs in after_findings.values() for f in fs],
+                args.provider, priced=rep_after["dollars_shown"],
+                sheets=sheets),
+        }
+        text = json.dumps(payload, indent=2)
+    elif args.output == "json":
+        text = report.to_json(rep_after, diff=diff_obj)
+    else:
+        text = report.to_markdown(rep_after, diff=diff_obj)
 
     if args.out:
         with open(args.out, "w", encoding="utf-8") as f:
