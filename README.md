@@ -6,22 +6,26 @@ copy-paste fix. MIT licensed. Not a money play; a working tool.
 
 ## Worked example: the 283-repeat loop
 
-A public SWE-agent trajectory (`iterative__dvc-7734`, nebius set — chosen
-as the clearest loop case in the 73-trajectory set, not claimed
-representative) fell into an error loop: the agent issued a malformed
-`edit` command, got back `Usage: edit <start_line>:<end_line>`, and
-repeated the same broken command **283 times** until the step limit.
-The audit flagged it; the recommended fix (error-loop dedup: collapse
-repeats to first occurrence + `[repeated N×]`) was applied; the agent
-was re-run from the fixed context with a real model call
-(deepseek-chat, 2026-10-17, $0.0015).
+A public SWE-agent trajectory (`iterative__dvc-7734`, nebius set —
+chosen as the clearest loop case in the 73-trajectory set, not claimed
+representative) fell into an error loop: a malformed `edit` command,
+repeated **283 times** until the step limit. The audit flagged it; the
+recommended fix (error-loop dedup) was applied; the agent was re-run
+from the fixed context with a real model call (deepseek-chat,
+2026-10-17, $0.0015).
 
 **Before → after** (`--diff`, deepseek):
 
 - Waste: **23,309 tokens ($0.0035)** → **3,041 tokens ($0.0005)** —
   **−20,268 tokens (−$0.0030)**
 - The loop is gone: `error_loop_dedup` (−10,152 tokens) and
-  `diff_read` (−10,116 tokens) both resolved
+  `diff_read` (−10,116 tokens) both resolved — the 283 identical
+  repeats tripped both the exact-repeat and near-duplicate detectors,
+  so one fix cleared both
+- Same waste on other providers' rates: Claude Sonnet 5
+  $0.0466 → $0.0061, GPT-5/6 class $0.0932 → $0.0122, Grok
+  $0.0291 → $0.0038, Gemini Flash $0.0175 → $0.0023
+  (recorded sheets; override with `--pricing`)
 - The agent broke the loop on the very next call: instead of a 284th
   malformed edit, it reasoned about the actual bug (pickle protocol 5
   on Python 3.7) and issued `bash grep -rn "pickle" dvc/ | head -50`
@@ -43,10 +47,7 @@ python -m chewme_audit.cli traces/worked_example/before.jsonl \
     traces/worked_example/after.jsonl --diff --provider deepseek
 ```
 
-Full report, traces, and provenance notes:
-`traces/worked_example/` (`PROVENANCE.md` documents exactly what is
-real, what is synthetic, and what the re-run does and doesn't prove —
-it shows the agent progressing, not solving the underlying issue).
+Full report, traces, and provenance: `traces/worked_example/`.
 
 ## The honest scope, first
 
