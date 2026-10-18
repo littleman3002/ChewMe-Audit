@@ -1,0 +1,26 @@
+You are working in a Django checkout at /tmp/agentrun/django_debug2.
+
+SITUATION: Some tests in the cache test suite are failing. Your job is to
+diagnose the failure and fix the underlying bug.
+
+TASK:
+1. Run the failing tests to see the failures:
+   cd /tmp/agentrun/django_debug2/tests && PYTHONPATH=/tmp/agentrun/django_debug2 /home/hatch/workspace/.venv-chewme/bin/python runtests.py cache.tests.CacheUtils
+   (Use exactly that python and PYTHONPATH; the system python lacks Django's
+   dependencies.)
+2. Read the failure output, find the root cause in Django's source, and fix it.
+3. Re-run the full CacheUtils suite until it passes.
+
+RULES:
+- Do NOT modify anything under tests/. The tests are the specification.
+- Fix the source, not the test. Minimal change: the bug is small.
+- If you damage a file while editing, repair it with a targeted edit.
+  Do not use `git checkout` to restore source files — the checkout contains
+  the same broken state and will discard your work.
+- Batch your work with scripts the way you would normally; verify with the
+  test runner, not by guessing.
+
+SUCCESS: cache.tests.CacheUtils passes fully (12 tests, 0 failures) with
+zero changes under tests/.
+
+When the full suite passes, reply TASK COMPLETE.

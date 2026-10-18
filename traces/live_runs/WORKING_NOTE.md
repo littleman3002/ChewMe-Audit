@@ -213,7 +213,39 @@ certify false successes. This failure mode — *false success* — is distinct
 from success-with-waste and from inability-to-stop, and it is invisible to
 outcome-only metrics.
 
-**Design flaw (ours):** the bug must be the committed state, not a
-working-tree delta, or any `git checkout --` recovery silently restores the
-fix. A checkout-proof re-run is planned; its waste profile is the valid
-high-waste contrast, not the 1.3% reported here.
+**Design flaw (ours), now fixed:** the bug was a working-tree delta, so
+`git checkout --` silently restored the fix. The re-run below commits the
+bug as HEAD, making the broken state checkout-proof.
+
+**Clean re-run (checkout-proof):** bug committed as HEAD (`6fe0a74`), so
+`git checkout --` restores the broken state; upstream remote removed; task
+barred checkout-based recovery. Same model, harness, budget, success
+criterion. Trace: `traces/live_runs/trace_debug2.jsonl`;
+task: `traces/live_runs/task_debug2.txt`.
+
+**Outcome:** 16 steps, 12/12 pass, zero `tests/` changes, $0.0077 billed —
+and this time by agency. The agent's diff contains the historical fix
+(`t[0].strip().lower()` on the directive name), plus two benign extra
+`.strip()` calls. No file clobber, no checkout attempted, one verification
+run, clean stop. Stated mechanism ("strip whitespace from Cache-Control
+directive names/values") is approximately correct.
+
+**Waste:** 63.8% (2,940 tokens), all `oversized_unreferenced` — a single
+full-file read at step 7. The profile did *not* shift into error loops,
+traceback re-reads, or test re-runs. Waste moved from back-loaded
+re-verification (docstring solo: 94.6% `repeated_calls`) to front-loaded
+over-reading. Whether that read counts as waste is debatable: the agent
+located `_to_tuple` and applied the fix five steps later, so a human would
+call the read diligence. The detector's verdict is strict by design; take
+the 63.8% with that caveat.
+
+**Best interpretation so far:** waste tracks diagnostic ambiguity more than
+task type. A well-specified 1-line defect with a precise failing assertion
+stays cheap ($0.0077, 16 steps) even under genuine debugging. The error-loop
+profile we predicted would require a misleading traceback or a multi-hop
+cause — a new experiment, not a property of "debugging" as a category.
+
+**Standing:** the accidental-pass finding above remains the stronger
+methodology result. The clean re-run validates the experimental controls
+(checkout-proofing held; attribution auditing distinguished genuine success
+from false success) rather than producing a waste contrast.
