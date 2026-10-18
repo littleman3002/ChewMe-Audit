@@ -1,4 +1,0 @@
-
-[fast-count]
-tiktoken
-tokenizers
