@@ -9,7 +9,7 @@ import os
 import sys
 
 SRC = "/home/hatch/workspace/chewme-audit"
-EXCLUDE_DIRS = {"__pycache__", "build"}
+EXCLUDE_DIRS = {"__pycache__", "build", ".pytest_cache"}
 EXCLUDE_SUFFIXES = (".pyc", ".egg-info")
 
 
