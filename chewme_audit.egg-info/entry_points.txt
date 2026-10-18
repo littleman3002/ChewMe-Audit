@@ -1,2 +1,0 @@
-[console_scripts]
-chewme-audit = chewme_audit.cli:main
