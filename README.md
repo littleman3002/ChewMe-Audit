@@ -77,6 +77,12 @@ Full report, traces, and provenance: `traces/worked_example/`.
   if you want exacts.** Without `--api-log`, every dollar figure is
   labeled **estimated**. With it, cache accounting is **exact** and the
   report says **measured**.
+- **Not bound to API billing — works on subscription (flat-plan) usage
+  too.** The audit reads trace exports; it never calls a provider API,
+  so how you were billed doesn't matter. On a flat plan the meaningful
+  numbers are waste tokens and waste share ("35% of session I/O was pure
+  re-verification"); per-token dollar figures are illustrative there,
+  and the report labels them as such.
 - **The numbers behind it:** on public benchmark trajectories, 74%
   carried measurable waste ≥10% of input spend, ~6–16% of the total bill
   after honest shrinking. Those figures are labeled "measured on public
