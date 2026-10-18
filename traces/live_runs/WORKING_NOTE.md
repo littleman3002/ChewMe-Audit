@@ -164,3 +164,56 @@ non-completing agent is included, not dropped.
 Traces: `traces/live_runs/` (solo + 4 agents, full JSONL) with
 `PROVENANCE.md`. Audit JSONs reproducible via
 `python -m chewme_audit.cli <trace> --provider deepseek`.
+
+## Appendix — debugging run: the accidental pass (evaluation methodology finding)
+
+**Scope:** single follow-up experiment, not part of the docstring comparison.
+Same model (deepseek-chat), same harness, same budget. Task: fix 2 failing
+subtests in `cache.tests.CacheUtils` caused by a real historical Django bug
+(ticket #37424, 1-line revert in `django/utils/cache.py::_to_tuple`).
+Success criterion: full suite pass, zero changes under `tests/`.
+Trace: `traces/live_runs/trace_debug.jsonl`; task: `traces/live_runs/task_debug.txt`.
+
+**Outcome on paper:** 34 steps, 12/12 pass, zero test changes, $0.013 billed,
+1.3% waste (80 tokens, all `repeated_calls`). A clean win by every surface
+metric.
+
+**What the trace shows:** the pass is accidental. Verified link by link:
+
+1. The agent reproduced the failures and read the full source file — competent
+   early behavior.
+2. Mid-run it overwrote the entire `cache.py` with the string `"PLACEHOLDER"`
+   via `write_file` (its own `git diff --stat`: `1 insertion(+), 451
+   deletions(-)`). It caught the mistake itself: "I overwrote the file with
+   a placeholder by mistake."
+3. It "recovered" with `git checkout -- django/utils/cache.py`. The bug had
+   been introduced as a *working-tree* delta, so the checkout silently
+   restored the upstream fixed version. The agent ran it as a recovery
+   command; the fix arrived as a side effect it never detected.
+4. Its re-applied edit script then threw `AssertionError` — the broken text
+   it searched for no longer existed. It grepped, saw the line already
+   fixed, and added `.strip()` to the *other* branch — a line the historical
+   fix never touched and the failures never implicated.
+5. 12/12 passed. It declared TASK COMPLETE, describing the fix as "strip
+   whitespace from cache-control directive names **without values**." The
+   actual bug was whitespace preceding the `=` in directives *with* values
+   (`'max-age =300'`). Confident, wrong, untested against its own claim.
+
+**Attribution:** of the two `.strip()` calls in the final diff, the one that
+fixes the bug arrived via `git checkout --`; the one the agent wrote was
+unnecessary. The agent's causal contribution to the passing suite is zero.
+
+**The methodology point, not a model failure:** pass/fail + diff size +
+billed cost — the standard agentic-coding scoreboard — scores this run a
+clean win at $0.013. The trace shows a clobber, an accidental rescue, a
+cosmetic edit, and a misdescribed bug. Any evaluation that scores only final
+pass/fail, diff size, and cost — without verifying that the agent's own diff
+contains the fix and that its stated mechanism matches the actual bug — will
+certify false successes. This failure mode — *false success* — is distinct
+from success-with-waste and from inability-to-stop, and it is invisible to
+outcome-only metrics.
+
+**Design flaw (ours):** the bug must be the committed state, not a
+working-tree delta, or any `git checkout --` recovery silently restores the
+fix. A checkout-proof re-run is planned; its waste profile is the valid
+high-waste contrast, not the 1.3% reported here.
