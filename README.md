@@ -179,6 +179,7 @@ CHEWME_LAB=~/workspace/tokenizer-lab \
 | (default) | JSONL, one observation per line — schema auto-detected (generic, nebius/SWE-agent style, or bare observations) |
 | `--format langfuse` | Langfuse trace export (JSON array or JSONL) |
 | `--format langsmith` | LangSmith run export (JSON array or JSONL) |
+| `--format claude-code` | Claude Code CLI session transcript (`~/.claude/projects/*/*.jsonl`) — works on subscription usage too, no API key needed |
 | `--api-log FILE` | Provider API log: JSONL, one record per request with `prompt_tokens`, `cached_tokens`, `completion_tokens` (OpenAI-style `usage` objects accepted). Joined to steps by `(trace_id, step)`. |
 
 ## What the report contains

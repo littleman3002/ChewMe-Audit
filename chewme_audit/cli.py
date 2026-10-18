@@ -10,6 +10,8 @@ exacts. What each input needs:
   - JSONL: one observation per line (auto-detected schema; see adapters/jsonl.py)
   - Langfuse: trace export JSON/JSONL (use --format langfuse)
   - LangSmith: run export JSON/JSONL (use --format langsmith)
+  - Claude Code: CLI session transcript, ~/.claude/projects/*/*.jsonl
+    (use --format claude-code)
   - API log: JSONL of per-request usage with cache hit/miss split
     (see api_log.py for accepted shapes)
 """
@@ -24,6 +26,7 @@ from . import fixes as fixlib
 from .adapters import jsonl as jsonl_adapter
 from .adapters import langfuse as langfuse_adapter
 from .adapters import langsmith as langsmith_adapter
+from .adapters import claude_code as claude_code_adapter
 
 
 def load_traces(path, fmt):
@@ -31,6 +34,8 @@ def load_traces(path, fmt):
         return langfuse_adapter.load_langfuse(path)
     if fmt == "langsmith":
         return langsmith_adapter.load_langsmith(path)
+    if fmt == "claude-code":
+        return claude_code_adapter.load_claude_code(path)
     return jsonl_adapter.load_jsonl(path)
 
 
@@ -65,8 +70,8 @@ def main(argv=None):
     ap.add_argument("--provider", default="deepseek",
                     help="deepseek | grok | xai | claude | anthropic | openai | gemini | google (default: deepseek)")
     ap.add_argument("--format", default="jsonl", dest="fmt",
-                    choices=["jsonl", "langfuse", "langsmith"],
-                    help="input format (default: jsonl)")
+                    choices=["jsonl", "langfuse", "langsmith", "claude-code"],
+                    help="input format: jsonl | langfuse | langsmith | claude-code (Claude Code CLI transcripts, ~/.claude/projects/) (default: jsonl)")
     ap.add_argument("--output", default="markdown", dest="output",
                     choices=["markdown", "json"],
                     help="report format (default: markdown)")
