@@ -22,10 +22,11 @@ from the fixed context with a real model call (deepseek-chat,
   `diff_read` (−10,116 tokens) both resolved — the 283 identical
   repeats tripped both the exact-repeat and near-duplicate detectors,
   so one fix cleared both
-- Same waste on other providers' rates: Claude Sonnet 5
-  $0.0466 → $0.0061, GPT-5/6 class $0.0932 → $0.0122, Grok
-  $0.0291 → $0.0038, Gemini Flash $0.0175 → $0.0023
-  (recorded sheets; override with `--pricing`)
+- Per million wasted tokens, by provider (miss rate — what waste
+  actually costs): DeepSeek **$0.15**, Claude Sonnet 5.5 **$2.00**,
+  GPT-5/6 class **$4.00**, Grok **$1.25**, Gemini Flash **$0.75**.
+  Same waste, even playing field. (Recorded sheets; `--pricing`
+  overrides.)
 - The agent broke the loop on the very next call: instead of a 284th
   malformed edit, it reasoned about the actual bug (pickle protocol 5
   on Python 3.7) and issued `bash grep -rn "pickle" dvc/ | head -50`
@@ -182,8 +183,8 @@ CHEWME_LAB=~/workspace/tokenizer-lab \
 Recorded sheets (re-verify before quoting): `deepseek-flash` —
 miss $0.15/M, hit $0.003/M, out $0.60/M (peak windows 01:00–04:00 and
 06:00–10:00 UTC Mon–Fri ×2); `grok-4.20-0309` — in $1.25/M, cached
-$0.20/M, out $2.50/M; `claude-sonnet-5` — miss $2.00/M, hit $0.20/M,
-out $10.00/M; `gpt-5.6-sol` — miss $4.00/M, hit $0.40/M, out $20.00/M
+$0.20/M, out $2.50/M; `claude-sonnet-5-5` — miss $2.00/M, hit $0.10/M
+(20×), out $10.00/M; `gpt-5.6-sol` — miss $4.00/M, hit $0.40/M, out $20.00/M
 (promo through 2026-11-21); `gemini-3.8-flash` — miss $0.75/M,
 hit $0.075/M, out $3.75/M. Waste is priced at the cache-**miss** rate:
 measured on benchmark trajectories, waste spans are 100% cache misses

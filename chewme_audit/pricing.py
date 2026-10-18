@@ -10,9 +10,9 @@ Sheets (recorded 2026-10-17; re-verify before quoting):
     Peak windows 01:00-04:00 and 06:00-10:00 UTC Mon-Fri double prices.
   grok-4.20-0309 (reasoning + non-reasoning): in $1.25/M, cached $0.20/M,
     out $2.50/M.
-  claude (Sonnet 5 representative): miss $2.00/M, hit $0.20/M (0.1x),
-    out $10.00/M. Writes cost 1.25x (5-min) / 2x (1-hour). Newer
-    Sonnet 5.5 / Opus 5.5 read at 0.05x (20x); Fable at 0.025x (40x).
+  claude (Sonnet 5.5): miss $2.00/M, hit $0.10/M (0.05x, 20x),
+    out $10.00/M. Writes cost 1.25x (5-min) / 2x (1-hour). Opus 5.5
+    reads at 0.05x (20x); Fable at 0.025x (40x).
   openai (GPT-5/6 class): miss $4.00/M, hit $0.40/M (90% off), out
     $20.00/M. PROMO caveat: GPT-5.6 Sol $4/$20 runs at least through
     2026-11-21. Older models differ (GPT-4o 50% off, GPT-4.1 75% off).
@@ -63,22 +63,22 @@ SHEETS = {
         "cache_discount": 6.25,
     },
     "claude": {
-        "model": "claude-sonnet-5",
+        "model": "claude-sonnet-5-5",
         "miss_per_mtok": 2.00,
-        "hit_per_mtok": 0.20,
+        "hit_per_mtok": 0.10,
         "out_per_mtok": 10.00,
         "peak_multiplier": 1.0,
         "peak_windows_utc": [],
-        "cache_discount": 10.0,
+        "cache_discount": 20.0,
     },
     "anthropic": {
-        "model": "claude-sonnet-5",
+        "model": "claude-sonnet-5-5",
         "miss_per_mtok": 2.00,
-        "hit_per_mtok": 0.20,
+        "hit_per_mtok": 0.10,
         "out_per_mtok": 10.00,
         "peak_multiplier": 1.0,
         "peak_windows_utc": [],
-        "cache_discount": 10.0,
+        "cache_discount": 20.0,
     },
     "openai": {
         "model": "gpt-5.6-sol",

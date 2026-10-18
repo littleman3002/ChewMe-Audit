@@ -90,7 +90,7 @@ def main(argv=None):
                           "or correct rates."))
     ap.add_argument("--total-bill", action="store_true", dest="total_bill",
                     help=("OPT-IN: include the illustrative total-bill share "
-                          "(assumes outputs ~50% of bill). Off by default so "
+                          "(assumes outputs ~50%% of bill). Off by default so "
                           "nobody quotes it without the label."))
     args = ap.parse_args(argv)
 
