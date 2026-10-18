@@ -33,9 +33,24 @@ step contributes its per-step max across covering findings; total = sum.
 the DeepSeek v3 local tokenizer (`deepseek` provider in `pricing.py`).
 
 **Cross-trace waste is reported separately** and is NOT in the per-trace
-shares: normalized-identical tool observations appearing in >1 trace,
-waste = (n_traces − 1) × tokens. Near-duplicates are deliberately not
-flagged cross-trace (conservative).
+shares: SHA-256 of whitespace-normalized tool observations appearing in
+>1 trace, waste = (n_traces − 1) × tokens. **No similarity threshold is
+involved** — cross-trace matching is exact, so the 17,050 figure cannot be
+inflated by near-duplicate false positives. Near-duplicates are
+deliberately not flagged cross-trace (conservative, documented in
+`cross_trace.py`).
+
+**Threshold honesty:** the ≥0.85 `difflib` similarity threshold applies
+only to the *within-trace* `near_duplicate_resends` detector. It is a
+first cut, not sensitivity-tested. In the five live traces it contributed
+a small minority of waste (repeated_calls dominated everywhere), so
+threshold choice does not move the headline numbers — but anyone reusing
+the detector on noisier traces should test it.
+
+**Real-trace exercise:** `cross_trace.py`'s 4 unit tests use synthetic
+cases, but the reported 17,050 tokens come from running the module
+directly against the four real 4-agent traces in this directory — that
+real-data run *is* the validation behind the number, not just the tests.
 
 ## Identical starting conditions (confirmed)
 
@@ -85,28 +100,36 @@ Agent 1 was the most expensive ($0.36), never declared TASK COMPLETE (hit
 the 1M-token budget cap), and **replaced real documentation with
 one-liners**: 117 deletions, including a 60-line module docstring in
 `django/db/models/fields/related_descriptors.py`. Concrete trigger chain,
-from its trace (`trace_4agent_1.jsonl`):
+with verbatim trace evidence (`trace_4agent_1.jsonl`):
 
-1. It inspected files with `head -3` / `head -4` only (steps 12–18) — never
-   saw full contents. `head -3` on `related_descriptors.py` showed only the
-   opening quotes and first line, so it classified a 60-line docstring as
-   a stub.
-2. At step 176 it wrote `replace_docs.py` whose `replace()` swaps the
-   **entire** first-statement docstring span
-   (`lines[start:end+1] = new_lines`) — a replace path, not just insert.
-   Stated purpose in the trace: "replaces the generic docstrings with
-   accurate descriptions."
-3. It could not distinguish its own previously inserted generic docstrings
-   from genuine pre-existing documentation, so the replace mapping hit
-   real docs. The task said "skip files that already have a module
-   docstring" and "do not change any other code" — the agent had drifted
-   from "add missing" to "improve existing."
-4. It never ran `git diff` to verify its edits, and spent its remaining
-   budget re-running file-discovery commands (the waste pattern itself).
+1. **Shallow observation.** It inspected files with `head -3` / `head -4`
+   only (steps 12–18) — never saw full contents. `head -3` on
+   `related_descriptors.py` showed only the opening quotes and first line,
+   so it classified a 60-line docstring as a stub.
+2. **Task drift, verbatim.** Step 176: *"I'll write a script that replaces
+   the generic docstrings with accurate descriptions, in batches."* The
+   task said "skip files that already have a module docstring" and "do not
+   change any other code" — the agent had reframed "add missing" as
+   "improve existing," and built a replace path (`replace_docs.py`,
+   `lines[start:end+1] = new_lines` swaps the entire docstring span)
+   instead of insert-only.
+3. **Verification ran — and the signal was ignored.** Its own
+   `git diff --stat` outputs show the damage appearing in real time:
+   step 180: `210 files changed, 210 insertions(+)` (clean) →
+   step 185: `replaced 20` → `214 files changed, 214 insertions(+),
+   16 deletions(-)` →
+   step 189: `replaced 28` → `223 files changed, 223 insertions(+),
+   117 deletions(-)`.
+   It kept replacing through steps 210–220. The deletions were the
+   *expected signature* of its replace operation, so they never registered
+   as damage — the failure was at classification (step 1), not at
+   verification. No step ever re-examined the classification.
 
 Failure cascade: shallow observation → wrong classification → destructive
-rewrite → no verification. No context-window overflow involved; the damage
-was deliberate-by-heuristic, not accidental-by-truncation.
+rewrite → verification output consistent with the wrong model. No
+context-window overflow involved; the damage was deliberate-by-heuristic,
+not accidental-by-truncation. Any harness that lets an agent rewrite
+first-party content on the basis of truncated reads will hit this.
 
 ## Cost multiple (secondary)
 
