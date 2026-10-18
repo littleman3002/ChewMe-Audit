@@ -25,6 +25,9 @@ was re-run from the fixed context with a real model call
 - The agent broke the loop on the very next call: instead of a 284th
   malformed edit, it reasoned about the actual bug (pickle protocol 5
   on Python 3.7) and issued `bash grep -rn "pickle" dvc/ | head -50`
+- What this proves: the fix lets the agent **progress**. It does NOT
+  prove the agent solves the underlying issue — the re-run was one
+  step. (See `traces/worked_example/PROVENANCE.md`.)
 - Residual waste ($0.0005, oversized outputs the fix didn't touch) is
   listed, not hidden — the report's "fixes not fully applied" section
   re-surfaces those snippets
