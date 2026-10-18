@@ -70,6 +70,20 @@ class DedupHooks(RunHooks):
         return result
 ''',
     },
+    "partition_agent_work": {
+        "title": "Partition work across agents; share read-only discoveries",
+        "safety": "Process change, not a code transform: assign disjoint work "
+                  "units per agent; publish shared exploration results once.",
+        "generic": '''\
+# When N agents work one task, identical observations across agents are
+# pure duplication. Fix at the orchestration layer:
+# 1. Partition the work units (files, directories, instances) disjointly
+#    before dispatch — no two agents should enumerate the same set.
+# 2. Share read-only discoveries once: one agent lists/explores, the
+#    result goes on a shared blackboard instead of N agents re-deriving it.
+# 3. Give each agent its own workspace so writes never collide.
+''',
+    },
     "memoize_repeated_call": {
         "title": "Memoize repeated identical tool calls",
         "safety": "Deterministic transform: same args -> same result; no model judgment involved.",

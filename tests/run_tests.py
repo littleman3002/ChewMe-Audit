@@ -8,9 +8,11 @@ import test_cli
 import test_pricing
 import test_diff
 import test_detectors
+import test_cross_trace
 
 passed = failed = 0
-for mod in (test_detectors, test_api_log, test_pricing, test_diff, test_cli):
+for mod in (test_detectors, test_api_log, test_pricing, test_diff, test_cli,
+            test_cross_trace):
     for name in sorted(dir(mod)):
         if not name.startswith("test_"):
             continue
