@@ -50,6 +50,10 @@ def run(trace, provider="deepseek"):
             },
             fix_key="error_loop_dedup" if _looks_like_error(first.text)
             else "memoize_repeated_call",
+            # The waste is the re-sends: every occurrence after the first.
+            # Listing them lets aggregation dedupe against per-step
+            # detectors (e.g. near-duplicates) flagging the same steps.
+            covers=frozenset(s.step_idx for s in steps[1:]),
         ))
     return findings
 

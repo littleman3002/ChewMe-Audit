@@ -146,3 +146,31 @@ def test_diff_json_has_structured_fields():
     assert dd["alignment"]["method"] == "trace_id"
     # honesty labels survive
     assert any("alignment" in lab for lab in dd["labels"])
+
+
+def test_overlapping_findings_deduped_not_summed():
+    # Identical repeats are flagged by BOTH repeated_calls and
+    # near_duplicate_resends on the same steps. The headline total must
+    # count each step once (max across detectors), not sum both.
+    from chewme_audit import detectors
+    t = Trace("t", _steps([ERROR_TEXT] * 6, "t"))
+    findings = {"t": detectors.run_all(t, "deepseek")}
+    by_det = {}
+    for f in findings["t"]:
+        if f.measurable:
+            by_det.setdefault(f.detector, 0)
+            by_det[f.detector] += f.waste_tokens
+    assert len(by_det) >= 2, f"expected overlap, got {sorted(by_det)}"
+    summed = sum(by_det.values())
+    rep = report.build([t], findings, "deepseek")
+    assert rep["total_waste_tokens"] < summed
+    # expected: waste attributed across covered steps, max per step
+    per_step = {}
+    for f in findings["t"]:
+        if f.measurable:
+            covers = f.covers or frozenset({f.step_idx})
+            per = f.waste_tokens / len(covers)
+            for s in covers:
+                k = (f.trace_id, s)
+                per_step[k] = max(per_step.get(k, 0), per)
+    assert rep["total_waste_tokens"] == int(round(sum(per_step.values())))

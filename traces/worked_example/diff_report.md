@@ -2,7 +2,7 @@
 
 ## 1) Net change
 
-- Waste: **23,309 tokens ($0.0035)** → **3,041 tokens ($0.0005)** ↓ -20,268 tokens (-0.0030 $)
+- Waste: **13,193 tokens ($0.0020)** → **3,041 tokens ($0.0005)** ↓ -10,152 tokens (-0.0015 $)
 - Total input: 15,184 → 5,091 tokens (-10,093) (-0.0015 $)
 - Residual waste left: **3,041 tokens ($0.0005)**
 
@@ -69,7 +69,7 @@ def memoized_call(tool_name, args, fn):
 
 # Agent cost audit
 
-Generated 2026-10-18T00:01:08.291364+00:00 · provider `deepseek` · pricing `model:deepseek-flash` · token basis `deepseek-v3-local`
+Generated 2026-10-18T01:32:09.154266+00:00 · provider `deepseek` · pricing `model:deepseek-flash` · token basis `deepseek-v3-local`
 
 **1 traces, 23 steps.** 5,091 input tokens ($0.0008)
 
@@ -141,5 +141,6 @@ def memoized_call(tool_name, args, fn):
 - waste priced at cache-miss rate (waste spans are 100% cache misses, measured)
 - cache accounting: ESTIMATED (no API logs provided — hand it your API logs for exacts)
 - waste share is a lower bound: re-sends inflate every later request's prompt (superlinear), which this figure does not model
+- waste totals dedupe overlapping findings: waste attributed across covered steps, each step takes the max
 - total-bill share omitted by default (illustrative; opt in with --total-bill)
 

@@ -20,3 +20,7 @@ class Finding:
     detail: dict = field(default_factory=dict)   # evidence (hashes, pairs, ...)
     fix_key: str = ""        # key into fixes.snippets
     measurable: bool = True  # False for classes that need API logs
+    covers: frozenset = field(default_factory=frozenset)  # step indices whose
+        # tokens this finding's waste accounts for; empty == {step_idx}.
+        # Run-level findings (e.g. a 283-repeat run) list every covered
+        # step so aggregation can dedupe overlaps across detectors.

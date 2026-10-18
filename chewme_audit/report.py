@@ -7,6 +7,9 @@ Honesty rules (standing):
 - Total-bill share is OPT-IN only (--total-bill): it assumes outputs
   ~50% of the bill, which is illustrative, not measured. Off by default
   so nobody quotes it without the label.
+- Waste totals dedupe overlapping detector findings: each finding's
+  waste is attributed across the steps it covers; each step contributes
+  its max across detectors, not the sum.
 - Unmeasurable classes appear as guidance, never with dollar figures.
 """
 
@@ -34,8 +37,18 @@ def build(traces, findings_by_trace, provider, framework="generic",
 
     findings = [f for fs in findings_by_trace.values() for f in fs]
     measurable = [f for f in findings if f.measurable]
+    # Dedupe overlapping findings across detectors: the same steps can be
+    # flagged twice (identical repeats are both exact repeats and
+    # near-duplicates). Each finding's waste is attributed evenly across
+    # the steps it covers; each step then contributes its max, not the sum.
+    per_step_waste = {}
     for f in measurable:
-        total_waste_tokens += f.waste_tokens
+        covers = f.covers or frozenset({f.step_idx})
+        per = f.waste_tokens / len(covers)
+        for s in covers:
+            key = (f.trace_id, s)
+            per_step_waste[key] = max(per_step_waste.get(key, 0), per)
+    total_waste_tokens = int(round(sum(per_step_waste.values())))
 
     # Cache accounting: EXACT when API logs are provided, estimated otherwise.
     # The API log's own token counts are authoritative for the totals, so
@@ -116,6 +129,7 @@ def build(traces, findings_by_trace, provider, framework="generic",
              if cache_accounting == "measured" else
              "cache accounting: ESTIMATED (no API logs provided — hand it your API logs for exacts)"),
             "waste share is a lower bound: re-sends inflate every later request's prompt (superlinear), which this figure does not model",
+            "waste totals dedupe overlapping findings: waste attributed across covered steps, each step takes the max",
         ] + ([
             "total-bill share illustrative: assumes outputs ~50% of bill "
             "(opt-in via --total-bill; do not quote without this label)",
