@@ -12,6 +12,8 @@ exacts. What each input needs:
   - LangSmith: run export JSON/JSONL (use --format langsmith)
   - Claude Code: CLI session transcript, ~/.claude/projects/*/*.jsonl
     (use --format claude-code)
+  - LiteLLM: standard logging payload JSONL, one object per LLM call
+    (use --format litellm; see adapters/litellm.py for the export snippet)
   - API log: JSONL of per-request usage with cache hit/miss split
     (see api_log.py for accepted shapes)
 """
@@ -28,6 +30,7 @@ from .adapters import jsonl as jsonl_adapter
 from .adapters import langfuse as langfuse_adapter
 from .adapters import langsmith as langsmith_adapter
 from .adapters import claude_code as claude_code_adapter
+from .adapters import litellm as litellm_adapter
 
 
 def load_traces(path, fmt):
@@ -37,6 +40,8 @@ def load_traces(path, fmt):
         return langsmith_adapter.load_langsmith(path)
     if fmt == "claude-code":
         return claude_code_adapter.load_claude_code(path)
+    if fmt == "litellm":
+        return litellm_adapter.load_litellm(path)
     return jsonl_adapter.load_jsonl(path)
 
 
@@ -72,8 +77,9 @@ def main(argv=None):
     ap.add_argument("--provider", default="deepseek",
                     help="deepseek | grok | xai | claude | anthropic | openai | gemini | google (default: deepseek)")
     ap.add_argument("--format", default="jsonl", dest="fmt",
-                    choices=["jsonl", "langfuse", "langsmith", "claude-code"],
-                    help="input format: jsonl | langfuse | langsmith | claude-code (Claude Code CLI transcripts, ~/.claude/projects/) (default: jsonl)")
+                    choices=["jsonl", "langfuse", "langsmith", "claude-code",
+                             "litellm"],
+                    help="input format: jsonl | langfuse | langsmith | claude-code (Claude Code CLI transcripts, ~/.claude/projects/) | litellm (LiteLLM standard logging payload JSONL) (default: jsonl)")
     ap.add_argument("--output", default="markdown", dest="output",
                     choices=["markdown", "json"],
                     help="report format (default: markdown)")

@@ -194,6 +194,7 @@ the author's own lab runs; it isn't needed to use the tool.
 | `--format langfuse` | Langfuse trace export (JSON array or JSONL) |
 | `--format langsmith` | LangSmith run export (JSON array or JSONL) |
 | `--format claude-code` | Claude Code CLI session transcript (`~/.claude/projects/*/*.jsonl`) — works on subscription usage too, no API key needed |
+| `--format litellm` | LiteLLM standard logging payload JSONL (one object per LLM call; export snippet in `chewme_audit/adapters/litellm.py`) |
 | `--api-log FILE` | Provider API log: JSONL, one record per request with `prompt_tokens`, `cached_tokens`, `completion_tokens` (OpenAI-style `usage` objects accepted). Joined to steps by `(trace_id, step)`. |
 
 ## What the report contains
