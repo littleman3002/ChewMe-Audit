@@ -4,6 +4,16 @@ A CLI that reads your agent traces and tells you where the money went —
 every fixable waste pattern, its measured dollar cost, and a concrete
 copy-paste fix. MIT licensed. Not a money play; a working tool.
 
+## Install
+
+```bash
+pip install chewme-audit
+chewme-audit traces/your_traces.jsonl --provider deepseek
+```
+
+For provider-token counts instead of the chars/4 estimate:
+`pip install chewme-audit[fast-count]`.
+
 ## Worked example: the 283-repeat loop
 
 A public SWE-agent trajectory (`iterative__dvc-7734`, nebius set —
