@@ -187,6 +187,11 @@ def to_markdown(rep, diff=None):
     L.append("")
     L.append("## Findings by class")
     L.append("")
+    L.append("_Per-class figures are raw detector totals and do not sum to the "
+             "headline: the same steps can be flagged by more than one detector "
+             "(an exact repeat is also a near-duplicate), so the headline total "
+             "dedupes overlaps — each step contributes its max, not the sum._")
+    L.append("")
     for det, d in sorted(rep["by_detector"].items(),
                          key=lambda kv: -kv[1]["waste_tokens"]):
         L.append(f"### {det}")

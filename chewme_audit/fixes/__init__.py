@@ -148,7 +148,7 @@ def cap_observation(text):
     },
     "minify_tool_output": {
         "title": "Serve compact JSON from tools (no pretty-printing)",
-        "safety": "Byte-exact restore is available via the chewme Rust core; minify is deterministic.",
+        "safety": "Byte-exact restore is available in the private core; the minify shown here is deterministic and Python-side.",
         "generic": '# json.dumps(obj, separators=(",", ":")) instead of indent=2.',
         "langchain": "# LangChain: return json.dumps(..., separators=(',', ':')) from tools.",
         "llamaindex": "# LlamaIndex: same.",
