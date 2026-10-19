@@ -162,15 +162,19 @@ Fix keys surviving on both sides are re-surfaced with their snippet and
 a note that the fix wasn't fully applied (or the agent found a new way
 to loop).
 
-For provider-token counts (billed-token basis instead of the chars/4
-estimate), point `CHEWME_LAB` at the tokenizer lab and run under its
-venv:
+### Token counting
 
-```bash
-CHEWME_LAB=~/workspace/tokenizer-lab \
-  ~/workspace/.venv-chewme/bin/python -m chewme_audit.cli traces/sample.jsonl \
-  --provider deepseek
-```
+Token counts come from the first available backend, and the basis is
+labeled on every figure:
+
+1. **`tiktoken` (`o200k_base`), if installed** (`pip install tiktoken`) —
+   counts labeled `o200k-local`. This is the only public basis whose
+   counts may back dollar figures.
+2. **chars/4 estimate** — labeled `chars4-estimate`. Used when tiktoken
+   isn't installed. Never priced; the report says so.
+
+A third backend (a local provider-tokenizer via `CHEWME_LAB`) exists for
+the author's own lab runs; it isn't needed to use the tool.
 
 ## Inputs
 
@@ -198,6 +202,10 @@ CHEWME_LAB=~/workspace/tokenizer-lab \
   stated plainly, never priced.
 - **`--receipt`:** tamper-evident per-finding receipts (SHA-256 over
   canonical fields; hashes of text, never the text — no PII).
+- **Data handling:** findings may include up to 200 characters of the
+  repeated observation as evidence (in the JSON report's `detail`
+  field). Receipts are hash-only. The tool runs locally and never
+  sends your traces anywhere.
 
 ## Pricing
 

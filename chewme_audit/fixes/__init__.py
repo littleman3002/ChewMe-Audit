@@ -35,7 +35,12 @@ import hashlib
 class DedupToolWrapper(BaseTool):
     tool: BaseTool
     max_repeats: int = 3
-    _counts: dict = {}
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Per-instance counter: a class-level `_counts = {}` would be
+        # shared across every wrapped tool.
+        self._counts = {}
 
     def _run(self, *args, **kwargs):
         out = self.tool._run(*args, **kwargs)
@@ -47,9 +52,27 @@ class DedupToolWrapper(BaseTool):
         return out
 ''',
         "llamaindex": '''\
-# LlamaIndex: dedup in your agent's step engine via a simple wrapper
-# around the tool output before it re-enters context (same pattern as
-# the generic snippet; hook it in your AgentRunner.step() post-hook).
+# LlamaIndex: dedup repeated identical tool outputs before they
+# re-enter context. Wrap once per tool; the counter is per-wrapper.
+from llama_index.core.tools import FunctionTool
+import hashlib
+
+def dedup_tool(tool: FunctionTool, max_repeats: int = 3) -> FunctionTool:
+    counts: dict = {}
+    orig_fn = tool.fn
+
+    def wrapped(*args, **kwargs):
+        out = orig_fn(*args, **kwargs)
+        h = hashlib.sha256(" ".join(str(out).split()).encode()).hexdigest()
+        counts[h] = counts.get(h, 0) + 1
+        if counts[h] > max_repeats:
+            return (f"[identical output repeated {counts[h]}x "
+                    "— see first occurrence]")
+        return out
+
+    meta = tool.metadata
+    return FunctionTool.from_defaults(
+        fn=wrapped, name=meta.name, description=meta.description)
 ''',
         "openai_agents": '''\
 # OpenAI Agents SDK: use a hooks override on tool results.
