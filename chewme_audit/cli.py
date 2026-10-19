@@ -19,6 +19,7 @@ exacts. What each input needs:
 import argparse
 import json
 import sys
+import time
 
 from . import api_log as api_log_mod
 from . import detectors, pricing, receipt as receipt_mod, report
@@ -58,6 +59,7 @@ def load_pricing_overrides(spec):
 
 
 def main(argv=None):
+    t0 = time.perf_counter()
     ap = argparse.ArgumentParser(
         prog="chewme-audit",
         description="Audit agent traces for fixable cost waste.")
@@ -105,7 +107,7 @@ def main(argv=None):
         if len(args.traces) != 2:
             ap.error("--diff needs exactly two trace files: "
                      "before.jsonl after.jsonl")
-        return run_diff(args, sheets)
+        return run_diff(args, sheets, t0)
 
     if len(args.traces) != 1:
         ap.error("expected one trace file (two with --diff)")
@@ -125,6 +127,7 @@ def main(argv=None):
     rep = report.build(traces, findings_by_trace, args.provider,
                        args.framework, api_log_records=api_records,
                        sheets=sheets, include_total_bill=args.total_bill)
+    rep["audit_wall_seconds"] = time.perf_counter() - t0
 
     if args.receipt:
         payload = {
@@ -147,7 +150,7 @@ def main(argv=None):
     return 0
 
 
-def run_diff(args, sheets):
+def run_diff(args, sheets, t0):
     """Diff mode: audit before and after, then prove the delta."""
     from . import diff as diffmod
 
@@ -164,6 +167,7 @@ def run_diff(args, sheets):
         before_traces, after_traces, args.provider, args.framework,
         api_log_records=api_records, sheets=sheets,
         include_total_bill=args.total_bill)
+    rep_after["audit_wall_seconds"] = time.perf_counter() - t0
 
     if args.receipt:
         # Receipts describe the current (after) state — the findings you

@@ -11,6 +11,9 @@ Honesty rules (standing):
   waste is attributed across the steps it covers; each step contributes
   its max across detectors, not the sum.
 - Unmeasurable classes appear as guidance, never with dollar figures.
+- The report carries the audit's own cost meter: $0.00 API spend
+  (the tool reads trace files locally and never calls a provider API)
+  plus measured wall time, printed beside the waste it found.
 """
 
 import json
@@ -22,7 +25,8 @@ from . import fixes as fixlib
 
 
 def build(traces, findings_by_trace, provider, framework="generic",
-          api_log_records=None, sheets=None, include_total_bill=False):
+          api_log_records=None, sheets=None, include_total_bill=False,
+          audit_wall_seconds=None):
     sheets = sheets or pricing.SHEETS
     sheet = sheets.get(provider)
     total_input_tokens = 0
@@ -118,6 +122,8 @@ def build(traces, findings_by_trace, provider, framework="generic",
         "total_bill_included": include_total_bill,
         "cache_accounting": cache_accounting,
         "api_log_requests_matched": matched_requests,
+        "audit_wall_seconds": audit_wall_seconds,
+        "audit_api_spend_dollars": 0.0,
         "by_detector": by_detector,
         "findings": findings,
         "framework": framework,
@@ -130,6 +136,7 @@ def build(traces, findings_by_trace, provider, framework="generic",
              "cache accounting: ESTIMATED (no API logs provided — hand it your API logs for exacts)"),
             "waste share is a lower bound: re-sends inflate every later request's prompt (superlinear), which this figure does not model",
             "waste totals dedupe overlapping findings: waste attributed across covered steps, each step takes the max",
+            "audit cost is $0.00 API spend: the tool reads trace files locally and never calls a provider API",
         ] + ([
             "total-bill share illustrative: assumes outputs ~50% of bill "
             "(opt-in via --total-bill; do not quote without this label)",
@@ -184,6 +191,10 @@ def to_markdown(rep, diff=None):
             L.append(f"- Total input spend: ${rep['total_input_dollars']:.4f} "
                      f"({rep['cache_accounting']}, from API logs)")
         L.append(f"- Share of input tokens: **{rep['waste_share_of_input']:.1%}**")
+    meter = ("- Audit cost: **$0.00** API spend (local-only run, no API calls)"
+             + (f" · {rep['audit_wall_seconds']:.1f}s wall time"
+                if rep.get("audit_wall_seconds") is not None else ""))
+    L.append(meter)
     L.append("")
     L.append("## Findings by class")
     L.append("")
