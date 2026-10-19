@@ -123,6 +123,8 @@ substitute:
   compression layer in front — the detectors work on the text either
   way, and the report tells you what compression left on the table.
 
+Measured on your traces, byte by byte.
+
 ## Why this gets more useful over time
 
 Two trends both point the same way:
