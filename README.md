@@ -103,6 +103,26 @@ Full report, traces, and provenance: `traces/worked_example/`.
   agent comprehension, no breakage. An audit that recommends fixes which
   break agents loses trust fast; these don't.
 
+## Compression tools and this audit
+
+Compression proxies and libraries (e.g. Headroom) shrink each request's
+payload before it reaches the model — smaller JSON, trimmed logs,
+deduplicated context. That's complementary to this tool, not a
+substitute:
+
+- **They shrink payloads; this finds behavior.** No compressor fixes an
+  agent that re-sends the same malformed edit 283 times, re-reads a
+  full file after a one-line change, or burns 35% of its I/O
+  re-verifying work it already did. Behavioral waste is invisible to
+  compression — it's the same tokens, sent too many times.
+- **They change what the model sees; this changes nothing.** The audit
+  is read-only on your traces. Compression is lossy by design (with
+  retrieval fallbacks); whether that tradeoff holds is measured on the
+  vendor's benchmarks, not your traffic.
+- **They compose.** Run the audit on traces captured with or without a
+  compression layer in front — the detectors work on the text either
+  way, and the report tells you what compression left on the table.
+
 ## Why this gets more useful over time
 
 Two trends both point the same way:
