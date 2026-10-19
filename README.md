@@ -257,6 +257,31 @@ expectations: 27,947 waste tokens, 39.6% of input on deepseek. Still
 benchmark-trajectory waste — production agents loop less — but a fairer
 picture of what "a normal run" looks like than the heavy tail.
 
+## Live runs: solo vs 4 unpartitioned agents
+
+Real billed runs on one task (module-docstring insertion on Django),
+one model (deepseek-chat), one harness — four agents in isolated
+workdirs, no partitioning, no coordinator. Full story in
+[`traces/live_runs/WORKING_NOTE.md`](traces/live_runs/WORKING_NOTE.md).
+
+|            | Solo  | Agent 1 | Agent 2 | Agent 3 | Agent 4 |
+|------------|-------|---------|---------|---------|---------|
+| Billed     | $0.15 | $0.36   | $0.15   | $0.30   | $0.29   |
+| Waste share| 35.4% | 31.9%   | 15.0%   | 34.0%   | 37.1%   |
+| Finished?  | yes   | **no** — budget cap | yes | yes | yes |
+
+Three findings: (1) the **agent lottery** — identical setup, 15.0–37.1%
+waste, so which instance you get matters more than how many you run;
+(2) **cross-trace duplication** — 17,050 tokens of byte-identical tool
+observations across traces (exact SHA-256, no similarity threshold),
+the coordination gap quantified; (3) **uncoordinated agents break
+things** — one agent misclassified a 60-line docstring as a stub from
+`head -3` reads and deleted 117 lines of real docs, ignoring its own
+`git diff` signal the whole way.
+
+Honesty caveat: one task family, one model. Treat every number as a data
+point, not a law.
+
 ## The `rust/` folder
 
 The deterministic Rust core from the earlier wrapper work, kept as a
