@@ -47,6 +47,26 @@ def test_repeated_calls_ignores_unique():
     assert detectors.repeated_calls.run(trace) == []
 
 
+def test_reread_unchanged_is_removable_waste():
+    # Same file re-read with nothing changed between the reads: pure
+    # re-verification. The second read is a candidate for removal.
+    trace = _load_fixture("reread_unchanged.jsonl")
+    findings = detectors.repeated_calls.run(trace)
+    assert findings, "identical re-read of an unchanged file must fire"
+    assert findings[0].detail["occurrences"] == 2
+
+
+def test_reread_after_edit_is_not_waste():
+    # Same file re-read, but a tool edited it between the reads: the
+    # second read picks up fresh content — a legitimate refresh, not
+    # re-verification. Neither detector may flag it.
+    trace = _load_fixture("reread_after_edit.jsonl")
+    assert detectors.repeated_calls.run(trace) == [], \
+        "re-read after an intervening edit must not fire repeated_calls"
+    assert detectors.near_duplicates.run(trace) == [], \
+        "re-read after an intervening edit must not fire near_duplicates"
+
+
 def test_near_duplicates_fires_on_reread():
     trace = _load_fixture("file_reread.jsonl")
     findings = detectors.near_duplicates.run(trace)

@@ -1,0 +1,2 @@
+{"text": "[File: /app/config.py (48 lines total)]\nimport os\n\nDEBUG = False\nTIMEOUT = 30\nRETRIES = 3\n\ndef load():\n    return os.environ.get(\"APP_ENV\", \"dev\")\n\n(Open file: /app/config.py)\n(Current directory: /app)\nbash-$"}
+{"text": "[File: /app/config.py (48 lines total)]\nimport os\n\nDEBUG = False\nTIMEOUT = 30\nRETRIES = 3\n\ndef load():\n    return os.environ.get(\"APP_ENV\", \"dev\")\n\n(Open file: /app/config.py)\n(Current directory: /app)\nbash-$"}
