@@ -24,7 +24,12 @@ def dedup_tool_result(text, history, max_repeats=3):
     h = hashlib.sha256(" ".join(text.split()).encode()).hexdigest()
     _seen[h] = _seen.get(h, 0) + 1
     if _seen[h] > max_repeats:
-        return None  # drop; or return f"[repeated {_seen[h]}x — first occurrence kept]"
+        # Stub, don't drop: the repetition itself is information (e.g. a
+        # re-read identical after an edit means the edit didn't land).
+        # The sha anchors the stub if the first occurrence is later
+        # compacted out of context.
+        return (f"[identical output repeated {_seen[h]}x "
+                f"— first occurrence kept · sha {h[:8]}]")
     return text
 ''',
         "langchain": '''\
@@ -48,7 +53,8 @@ class DedupToolWrapper(BaseTool):
         self._counts[h] = self._counts.get(h, 0) + 1
         n = self._counts[h]
         if n > self.max_repeats:
-            return f"[identical output repeated {n}x — see first occurrence]"
+            return (f"[identical output repeated {n}x "
+                    f"— first occurrence kept · sha {h[:8]}]")
         return out
 ''',
         "llamaindex": '''\
@@ -67,7 +73,7 @@ def dedup_tool(tool: FunctionTool, max_repeats: int = 3) -> FunctionTool:
         counts[h] = counts.get(h, 0) + 1
         if counts[h] > max_repeats:
             return (f"[identical output repeated {counts[h]}x "
-                    "— see first occurrence]")
+                    f"— first occurrence kept · sha {h[:8]}]")
         return out
 
     meta = tool.metadata
@@ -89,7 +95,8 @@ class DedupHooks(RunHooks):
         self._counts[h] = self._counts.get(h, 0) + 1
         n = self._counts[h]
         if n > self.max_repeats:
-            return f"[identical output repeated {n}x — see first occurrence]"
+            return (f"[identical output repeated {n}x "
+                    f"— first occurrence kept · sha {h[:8]}]")
         return result
 ''',
     },
