@@ -84,6 +84,16 @@ def _norm(path, workdir):
     return p
 
 
+def _same(a, b):
+    """Same file across path spellings (absolute vs relative). Requires
+    the shorter spelling to have >= 2 components — a bare filename is
+    too collision-prone to suffix-match."""
+    if a == b:
+        return True
+    short, long = (a, b) if len(a) < len(b) else (b, a)
+    return "/" in short and long.endswith("/" + short)
+
+
 def _lines_of(text):
     if not text:
         return 0
@@ -507,35 +517,39 @@ def assess(trace, workdir_diff_text=None):
             if ch["old_lb"]:
                 git_lb[np] = max(git_lb.get(np, 0), ch["old_lb"])
 
+    def _lb(path):
+        return max([v for k, v in git_lb.items() if _same(k, path)]
+                   or [0])
+
     def evidenced(path, before_step):
-        ev = git_lb.get(path, 0)
+        ev = _lb(path)
         for (st, p, a, b) in reads:
-            if p == path and st < before_step:
+            if _same(p, path) and st < before_step:
                 ev = max(ev, b)
         for (st, p, n) in wc_ev:
-            if p == path and st < before_step:
+            if _same(p, path) and st < before_step:
                 ev = max(ev, n)
         return ev
 
     def bytes_ev(path, before_step):
         return max([b for (st, p, b) in ls_ev
-                    if p == path and st < before_step] or [0])
+                    if _same(p, path) and st < before_step] or [0])
 
     def covered(path, before_step, evid):
         spans = [(a, b) for (st, p, a, b) in reads
-                 if p == path and st < before_step]
+                 if _same(p, path) and st < before_step]
         for (st, p, n) in tails:
-            if p == path and st < before_step and evid:
+            if _same(p, path) and st < before_step and evid:
                 spans.append((max(1, evid - n + 1), evid))
         return _union_len(spans), [st for (st, p, a, b) in reads
-                                   if p == path and st < before_step]
+                                   if _same(p, path) and st < before_step]
 
     created = set()
     seen_write = set()
     for (wstep, path, kind) in sorted(writes):
         pre_existing = any(st < wstep for (st, p, a, b) in reads
-                           if p == path) or path in git_lb or \
-            any(st < wstep for (st, p, n) in wc_ev if p == path)
+                           if _same(p, path)) or _lb(path) or \
+            any(st < wstep for (st, p, n) in wc_ev if _same(p, path))
         is_creation = path not in seen_write and not pre_existing
         if is_creation:
             created.add(path)
@@ -552,7 +566,7 @@ def assess(trace, workdir_diff_text=None):
             "bytes_evidenced": byt, "coverage": round(cov, 4),
             "read_steps": ev_steps,
             "sampled_steps": [st for (st, p) in sampled
-                              if p == path and st < wstep],
+                              if _same(p, path) and st < wstep],
             "pre_existing": not is_creation, "substantial": substantial,
             "inferred": False, "outside_workdir": bool(
                 workdir and path.startswith("/")
@@ -566,7 +580,7 @@ def assess(trace, workdir_diff_text=None):
     for (gstep, g) in git_obs:
         for path, ch in g.items():
             np = _norm(path, workdir)
-            own = {c for (st, c) in added_lines.get(np, []) if st < gstep}
+            own = {c for k, v in added_lines.items() if _same(k, np) for (st, c) in v if st < gstep}
             pure_pre = [c for c in ch["pure_del"] if c.strip() not in own]
             chg_pre = [c for c in ch["changed"] if c.strip() not in own]
             own_ct = (len(ch["pure_del"]) - len(pure_pre)) + \
@@ -574,6 +588,17 @@ def assess(trace, workdir_diff_text=None):
             has_del_evidence = bool(pure_pre or chg_pre) or \
                 (ch["stat_del"] and not ch["pure_del"] and not ch["changed"])
             window_start = prev_named.get(np, -1)
+            # A modification already explained by a direct write event
+            # in the window (Edit/Write/sed-i/redirect) is not
+            # script-mediated evidence: inference exists for writes the
+            # trace does NOT otherwise observe. (Held-out validation
+            # catch: an Edit at step 21 explained a diff that a step-6
+            # analysis script would otherwise have been blamed for.)
+            explained = any(window_start < wst < gstep
+                            for (wst, wp, wk) in writes if _same(wp, np))
+            if explained:
+                prev_named[np] = gstep
+                continue
             # Mediation is the execution itself: an interpreter command
             # the agent chose to run. Authorship of the script file is
             # recorded when known but not required — files created via
@@ -583,7 +608,7 @@ def assess(trace, workdir_diff_text=None):
             win_execs = [st for (st, sp, au) in execs
                          if window_start < st < gstep]
             if has_del_evidence and win_execs:
-                evid = max(git_lb.get(np, 0),
+                evid = max(_lb(np),
                            evidenced(np, win_execs[0]))
                 cov_lines, ev_steps = covered(np, win_execs[0], evid)
                 cov = (min(cov_lines, evid) / evid) if evid else 1.0
@@ -594,7 +619,7 @@ def assess(trace, workdir_diff_text=None):
                     "bytes_evidenced": bytes_ev(np, win_execs[0]),
                     "coverage": round(cov, 4), "read_steps": ev_steps,
                     "sampled_steps": [st for (st, p) in sampled
-                                      if p == np and st < win_execs[0]],
+                                      if _same(p, np) and st < win_execs[0]],
                     "pre_existing": True,
                     "substantial": evid >= MIN_EVIDENCED_LINES,
                     "inferred": True, "outside_workdir": False,
@@ -640,7 +665,7 @@ def assess(trace, workdir_diff_text=None):
         shallow, unread, read_ok = [], [], []
         for np in sorted(named):
             spans = [(a, b) for (st, p, a, b) in reads
-                     if p == np and st < last_del_step]
+                     if _same(p, np) and st < last_del_step]
             full = any(b - a >= 50 for (a, b) in spans)
             if not spans:
                 unread.append(np)
@@ -682,14 +707,14 @@ def assess(trace, workdir_diff_text=None):
         last_step = steps[-1].step_idx if steps else 0
         for path, ch in g.items():
             np = _norm(path, workdir)
-            own = {c for (_, c) in added_lines.get(np, [])}
+            own = {c for k, v in added_lines.items() if _same(k, np) for (_, c) in v}
             pure_pre = [c for c in ch["pure_del"] if c.strip() not in own]
             chg_pre = [c for c in ch["changed"] if c.strip() not in own]
             if not (pure_pre or chg_pre or ch["added"]):
                 continue
             evid = max(ch["old_lb"], evidenced(np, last_step + 1))
             cov_lines, ev_steps = covered(np, last_step + 1, evid)
-            has_reads = any(p == np for (_, p, a, b) in reads)
+            has_reads = any(_same(p, np) for (_, p, a, b) in reads)
             cov = (min(cov_lines, evid) / evid) if (evid and has_reads) \
                 else None
             A.entries.append({

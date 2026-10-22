@@ -139,6 +139,34 @@ def test_claude_code_direct_blind_write_flagged():
     assert flags[0].detail["coverage"] < 0.25
 
 
+def test_edit_explained_modification_is_not_inferred():
+    # Regression (held-out Haiku run): file modified by a structured
+    # Edit, later git --stat shows deletions, an unrelated analysis
+    # script ran earlier. The modification is explained by the Edit —
+    # no inferred entry may blame the script.
+    t = _trace([
+        ("assistant", _call("run_bash", {"cmd": "wc -l src/big.py"})),
+        ("tool", "[run_bash]\n[exit 0]\n920 src/big.py"),
+        ("assistant", _call("run_bash",
+                            {"cmd": "python3 - <<'EOF'\nimport ast\n"
+                                    "ast.parse(open('src/big.py').read())\n"
+                                    "EOF"})),
+        ("tool", "[run_bash]\n[exit 0]\nok"),
+        ("assistant", _call("run_bash",
+                            {"cmd": "sed -n '260,265p' src/big.py"})),
+        ("tool", "[run_bash]\n[exit 0]\na\nb\nc\nd\ne\nf"),
+        ("assistant", _call("edit_file", {"path": "src/big.py"})),
+        ("tool", "[edit_file] updated"),
+        ("assistant", _call("run_bash", {"cmd": "git diff --stat"})),
+        ("tool", "[run_bash]\n[exit 0]\n src/big.py | 2 +-\n"
+                 " 1 file changed, 1 insertion(+), 1 deletion(-)"),
+    ])
+    flags, risk = blind_edit.assess_and_flag(t)
+    inferred = [e for e in risk["ledger"] if e["inferred"]]
+    assert inferred == [], inferred
+    assert flags == []
+
+
 def test_unassessed_without_tool_inputs():
     t = _trace([("tool", "just an observation"),
                 ("tool", "another one")])
