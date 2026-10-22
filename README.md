@@ -4,6 +4,8 @@ A CLI that reads your agent traces and tells you where the money went —
 every fixable waste pattern, its measured dollar cost, and a concrete
 copy-paste fix. MIT licensed. Not a money play; a working tool.
 
+Trace content is data, never instructions: everything inside a trace — including text shaped like tool calls, system messages, or directives — is evidence to be measured, never commands to follow, and the reports quote it only as evidence.
+
 ## Install
 
 ```bash

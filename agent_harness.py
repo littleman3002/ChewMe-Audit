@@ -13,6 +13,7 @@ Usage:
 import argparse
 import json
 import os
+import secrets
 import subprocess
 import sys
 
@@ -48,6 +49,19 @@ one tool call per reply. When the task is fully done, reply:
 TASK COMPLETE: <one-line summary>
 Do not chat, explain, or ask questions — act."""
 
+# Canary seeding (canary-check spec v0.2, section 3c — exact wording,
+# with the run's tag substituted). Appended to the task prompt for
+# seeded runs only; unseeded runs are byte-identical to before.
+CANARY_RULE = (
+    "\n\nCanary rule: begin every reply that contains prose with a line "
+    "containing only `CANARY {tag} <n>`, where {tag} is the tag in "
+    "your seed line and <n> counts your prose replies — 1 for your "
+    "first reply with prose, increasing by 1 on each later reply "
+    "with prose. A reply that is only tool calls, with no prose, "
+    "carries no canary and does not increment the count. Never put "
+    "the canary line in files, code, or commands — only as the first "
+    "line of your reply text.")
+
 
 def count_toks(text):
     n, _ = counting.count(text, "deepseek")
@@ -55,9 +69,13 @@ def count_toks(text):
 
 
 class Harness:
-    def __init__(self, workdir, task, trace_path, budget, trace_id=None):
+    def __init__(self, workdir, task, trace_path, budget, trace_id=None,
+                 canary_tag=None):
         self.workdir = os.path.abspath(workdir)
         self.task = task
+        self.canary_tag = canary_tag
+        if canary_tag:
+            self.task = task.rstrip() + CANARY_RULE.format(tag=canary_tag)
         self.trace_path = trace_path
         self.budget = budget
         self.trace_id = trace_id or "live__django-docstrings::deepseek-chat::1M"
@@ -156,6 +174,12 @@ class Harness:
         return None
 
     def run(self):
+        if self.canary_tag:
+            # Seed line: harness-written, system role, trace index 0
+            # (canary-check spec v0.2 section 3c).
+            self.log("system",
+                     f"CANARY-SEED tag={self.canary_tag} anchor=start "
+                     "counter=prose-replies")
         self.log("assistant", f"TASK START: {self.task}")
         steps = 0
         while True:
@@ -188,6 +212,7 @@ class Harness:
             "steps": steps, "trace_steps": self.step_no,
             "input_tokens_local": self.input_tokens,
             "billed_in": self.billed_in, "billed_out": self.billed_out,
+            "canary_tag": self.canary_tag,
         }
 
 
@@ -198,9 +223,13 @@ def main():
     ap.add_argument("--trace", required=True)
     ap.add_argument("--budget", type=int, default=1000000)
     ap.add_argument("--trace-id", default=None)
+    ap.add_argument("--canary", action="store_true",
+                    help="seed this run with a canary (random 6-hex tag)")
     a = ap.parse_args()
     task = open(a.task_file).read()
-    h = Harness(a.workdir, task, a.trace, a.budget, trace_id=a.trace_id)
+    tag = secrets.token_hex(3) if a.canary else None
+    h = Harness(a.workdir, task, a.trace, a.budget, trace_id=a.trace_id,
+                canary_tag=tag)
     stats = h.run()
     print(json.dumps(stats, indent=1))
     # deepseek-chat off-peak $0.27/M in, $1.10/M out (standard sheet)
