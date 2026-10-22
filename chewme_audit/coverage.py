@@ -707,6 +707,13 @@ def assess(trace, workdir_diff_text=None):
         last_step = steps[-1].step_idx if steps else 0
         for path, ch in g.items():
             np = _norm(path, workdir)
+            # Same principle as the inferred tier: if the trace itself
+            # already shows a direct write to this file, that observed
+            # write governs — the supplied diff adds no new evidence
+            # about it (and would double-count a self-evidencing span
+            # edit as a blind one).
+            if any(_same(wp, np) for (_, wp, _) in writes):
+                continue
             own = {c for k, v in added_lines.items() if _same(k, np) for (_, c) in v}
             pure_pre = [c for c in ch["pure_del"] if c.strip() not in own]
             chg_pre = [c for c in ch["changed"] if c.strip() not in own]

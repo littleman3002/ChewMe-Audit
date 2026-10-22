@@ -167,6 +167,48 @@ def test_edit_explained_modification_is_not_inferred():
     assert flags == []
 
 
+def test_workdir_diff_flags_unobserved_write():
+    # Trace shows shallow reads but NO write event for the file (e.g.
+    # a harness that doesn't log writes); the supplied diff supplies
+    # the write evidence exactly -> flag, NOT labeled inferred.
+    diff = (
+        "diff --git a/src/big.py b/src/big.py\n"
+        "--- a/src/big.py\n+++ b/src/big.py\n"
+        "@@ -100,60 +100,3 @@\n"
+        + "".join(f"-old line {i}\n" for i in range(40))
+        + "+rewritten\n")
+    t = _trace([
+        ("assistant", _call("run_bash", {"cmd": "wc -l src/big.py"})),
+        ("tool", "[run_bash]\n[exit 0]\n920 src/big.py"),
+        ("assistant", _call("run_bash", {"cmd": "head -5 src/big.py"})),
+        ("tool", "[run_bash]\n[exit 0]\nl1\nl2\nl3\nl4\nl5"),
+    ])
+    flags, risk = blind_edit.assess_and_flag(t, workdir_diff_text=diff)
+    assert len(flags) == 1, [f.summary for f in flags]
+    assert "workdir-diff" in flags[0].summary
+    assert flags[0].detail["inferred"] is False
+    assert flags[0].detail["pure_deletions"] == 39  # 40 del, 1 paired
+
+
+def test_workdir_diff_skips_trace_observed_write():
+    # If the trace already shows the write (a span Edit), the supplied
+    # diff must not re-flag it as a blind full-file change.
+    diff = (
+        "diff --git a/src/big.py b/src/big.py\n"
+        "--- a/src/big.py\n+++ b/src/big.py\n"
+        "@@ -260,3 +260,3 @@\n ctx\n-old comment\n+new comment\n ctx2\n")
+    t = _trace([
+        ("assistant", _call("run_bash", {"cmd": "wc -l src/big.py"})),
+        ("tool", "[run_bash]\n[exit 0]\n920 src/big.py"),
+        ("assistant", _call("edit_file", {"path": "src/big.py"})),
+        ("tool", "[edit_file] updated"),
+    ])
+    flags, risk = blind_edit.assess_and_flag(t, workdir_diff_text=diff)
+    assert flags == []
+    assert not any(e["write_kind"] == "workdir_diff"
+                   for e in risk["ledger"])
+
+
 def test_unassessed_without_tool_inputs():
     t = _trace([("tool", "just an observation"),
                 ("tool", "another one")])
