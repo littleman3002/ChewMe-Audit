@@ -2,6 +2,7 @@
 
 from . import near_duplicates, oversized_outputs, pretty_print, repeated_calls
 from . import unmeasurable
+from . import blind_edit  # noqa: F401  (risk flags; run separately, not in run_all)
 
 MEASURABLE = [
     repeated_calls,

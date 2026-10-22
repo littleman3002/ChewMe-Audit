@@ -26,7 +26,7 @@ from . import fixes as fixlib
 
 def build(traces, findings_by_trace, provider, framework="generic",
           api_log_records=None, sheets=None, include_total_bill=False,
-          audit_wall_seconds=None):
+          audit_wall_seconds=None, risk=None):
     sheets = sheets or pricing.SHEETS
     sheet = sheets.get(provider)
     total_input_tokens = 0
@@ -126,6 +126,7 @@ def build(traces, findings_by_trace, provider, framework="generic",
         "audit_api_spend_dollars": 0.0,
         "by_detector": by_detector,
         "findings": findings,
+        "risk": risk,
         "framework": framework,
         "_sheets": sheets,  # internal: per-finding dollar pricing; stripped from JSON output
         "labels": [
@@ -195,6 +196,15 @@ def to_markdown(rep, diff=None):
              + (f" · {rep['audit_wall_seconds']:.1f}s wall time"
                 if rep.get("audit_wall_seconds") is not None else ""))
     L.append(meter)
+    risk = rep.get("risk")
+    if risk is not None:
+        if risk.get("assessed"):
+            L.append(f"- Risk flags: **{risk['writes_checked']} writes "
+                     f"checked, {risk['flagged']} flagged.** "
+                     f"(blind-edit check — risk, not waste; never priced)")
+        else:
+            L.append(f"- Risk flags: read-coverage could not be assessed "
+                     f"— {risk.get('reason', 'no tool inputs in trace')}")
     L.append("")
     L.append("## Findings by class")
     L.append("")
@@ -223,6 +233,20 @@ def to_markdown(rep, diff=None):
     if len(meas) > 50:
         L.append(f"\n_...and {len(meas)-50} more (see JSON output)._")
     L.append("")
+    risk_findings = [f for f in rep["findings"]
+                     if f.detector == "blind_edit"]
+    if risk_findings:
+        from .detectors.blind_edit import DEFINITION
+        L.append("## Risk flags (not priced)")
+        L.append("")
+        L.append(f"_{DEFINITION}. Risk flags carry no dollar figure: a "
+                 f"blind edit that works costs no tokens — its cost is "
+                 f"damage when it doesn't._")
+        L.append("")
+        for f in risk_findings:
+            L.append(f"- **[blind_edit]** {f.trace_id} step {f.step_idx}: "
+                     f"{f.summary}")
+        L.append("")
     L.append("## Recommended fixes")
     L.append("")
     seen = []
@@ -238,7 +262,8 @@ def to_markdown(rep, diff=None):
         L.append("")
         L.append(f"```python\n{fix['snippet']}\n```")
         L.append("")
-    unmeas = [f for f in rep["findings"] if not f.measurable]
+    unmeas = [f for f in rep["findings"]
+              if not f.measurable and f.detector != "blind_edit"]
     if unmeas:
         L.append("## Needs your API logs (not measurable from traces)")
         L.append("")

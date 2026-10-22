@@ -93,6 +93,19 @@ Full report, traces, and provenance: `traces/worked_example/`.
   numbers are waste tokens and waste share ("35% of session I/O was pure
   re-verification"); per-token dollar figures are illustrative there,
   and the report labels them as such.
+- **Risk flags are a separate category from cost findings.** Alongside
+  the waste audit, the report checks read coverage: for every write to
+  a pre-existing file, how much of that file had the agent actually
+  read first? A full replace or pattern edit (`sed -i`) made after
+  reading under 25% of a file the trace evidences at 40+ lines is
+  flagged as a **blind edit**. Risk flags never carry a dollar figure —
+  a blind edit that works costs no tokens; its cost is damage when it
+  doesn't. Every report states the check ran ("N writes checked, M
+  flagged"), including when the answer is zero. Script-mediated edits
+  are flagged only as **inferred**, from later git output in the trace,
+  and say so; where per-file attribution isn't in the trace, the flag
+  is trace-level and says that too. Suggested by
+  u/Impressive_Laugh_176 on Reddit, from the live-run case below.
 - **The numbers behind it:** on public benchmark trajectories, 74%
   carried measurable waste ≥10% of input spend, ~6–16% of the total bill
   after honest shrinking. Those figures are labeled "measured on public
@@ -219,6 +232,7 @@ the author's own lab runs; it isn't needed to use the tool.
 | `--format litellm` | LiteLLM standard logging payload JSONL (one object per LLM call; export snippet in `chewme_audit/adapters/litellm.py`) |
 | Claude Code skill | `skills/chewme-audit/SKILL.md` — copy to `~/.claude/skills/`, then ask Claude where your tokens went |
 | `--api-log FILE` | Provider API log: JSONL, one record per request with `prompt_tokens`, `cached_tokens`, `completion_tokens` (OpenAI-style `usage` objects accepted). Joined to steps by `(trace_id, step)`. |
+| `--workdir-diff FILE` | Unified diff of the working tree (before/after the agent ran). Gives the blind-edit risk check exact write evidence instead of inference from git output inside the trace. |
 
 ## What the report contains
 
@@ -229,6 +243,11 @@ the author's own lab runs; it isn't needed to use the tool.
   label.
 - **Prioritized findings:** every waste instance by dollar impact, with
   the evidence (repetition counts, similarity scores, diff hints).
+- **Risk flags (not priced):** blind edits — content-replacing writes
+  made on shallow read evidence — with their coverage numbers and
+  step ranges. The headline always carries the one-line result
+  ("N writes checked, M flagged"); the full coverage ledger is in the
+  JSON output.
 - **Recommended fixes:** copy-paste snippets for your framework
   (`--framework generic|langchain|llamaindex|openai_agents`), each with
   its safety evidence.

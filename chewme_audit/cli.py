@@ -105,6 +105,12 @@ def main(argv=None):
                     help=("OPT-IN: include the illustrative total-bill share "
                           "(assumes outputs ~50%% of bill). Off by default so "
                           "nobody quotes it without the label."))
+    ap.add_argument("--workdir-diff", default=None, dest="workdir_diff",
+                    help=("path to a unified diff of the working tree "
+                          "(before/after the agent ran). Gives the "
+                          "blind-edit risk check exact write evidence "
+                          "instead of inference from git output in the "
+                          "trace."))
     args = ap.parse_args(argv)
 
     sheets = pricing.apply_overrides(load_pricing_overrides(args.pricing))
@@ -127,12 +133,28 @@ def main(argv=None):
                    if args.api_log else None)
 
     findings_by_trace = {}
+    risk = {"assessed": True, "reason": "", "writes_checked": 0,
+            "flagged": 0, "ledger": []}
+    wd_text = None
+    if args.workdir_diff:
+        with open(args.workdir_diff, encoding="utf-8") as f:
+            wd_text = f.read()
     for t in traces:
         findings_by_trace[t.trace_id] = detectors.run_all(t, args.provider)
+        bf, br = detectors.blind_edit.assess_and_flag(t, wd_text)
+        findings_by_trace[t.trace_id].extend(bf)
+        risk["writes_checked"] += br["writes_checked"]
+        risk["flagged"] += br["flagged"]
+        for e in br["ledger"]:
+            risk["ledger"].append(dict(e, trace_id=t.trace_id))
+        if not br["assessed"]:
+            risk["assessed"] = False
+            risk["reason"] = br["reason"]
 
     rep = report.build(traces, findings_by_trace, args.provider,
                        args.framework, api_log_records=api_records,
-                       sheets=sheets, include_total_bill=args.total_bill)
+                       sheets=sheets, include_total_bill=args.total_bill,
+                       risk=risk)
     rep["audit_wall_seconds"] = time.perf_counter() - t0
 
     if args.receipt:
