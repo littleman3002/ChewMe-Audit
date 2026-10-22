@@ -105,7 +105,7 @@ Full report, traces, and provenance: `traces/worked_example/`.
   are flagged only as **inferred**, from later git output in the trace,
   and say so; where per-file attribution isn't in the trace, the flag
   is trace-level and says that too. Suggested by
-  u/Impressive_Laugh_176 on Reddit, from the live-run case below.
+  u/Future_AGI on Reddit, from the live-run case below.
 - **The numbers behind it:** on public benchmark trajectories, 74%
   carried measurable waste ≥10% of input spend, ~6–16% of the total bill
   after honest shrinking. Those figures are labeled "measured on public
