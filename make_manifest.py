@@ -28,13 +28,13 @@ def main():
     out = sys.argv[1] if len(sys.argv) > 1 else "/tmp/chewme-audit-manifest"
     paths = []
     for root, dirs, files in os.walk(SRC):
-        dirs[:] = [d for d in dirs if d != "__pycache__" and d != "build"
+        dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS
                    and not d.endswith(".egg-info")]
         for f in files:
-            if f.endswith(".pyc"):
-                continue
             full = os.path.join(root, f)
             rel = os.path.relpath(full, SRC)
+            if excluded(rel):
+                continue
             # validate UTF-8
             open(full, "rb").read().decode("utf-8")
             paths.append(rel)
