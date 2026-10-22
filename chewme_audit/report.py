@@ -203,8 +203,7 @@ def to_markdown(rep, diff=None):
                      f"checked, {risk['flagged']} flagged.** "
                      f"(blind-edit check — risk, not waste; never priced)")
         else:
-            L.append(f"- Risk flags: read-coverage could not be assessed "
-                     f"— {risk.get('reason', 'no tool inputs in trace')}")
+            L.append(f"- Risk flags: {risk.get('reason', 'read-coverage could not be assessed')}")
     L.append("")
     L.append("## Findings by class")
     L.append("")
