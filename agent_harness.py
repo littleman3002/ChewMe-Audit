@@ -62,6 +62,41 @@ CANARY_RULE = (
     "the canary line in files, code, or commands — only as the first "
     "line of your reply text.")
 
+# Fixed-tag variant (harness-fix validation, stage 1b): the same
+# canary line on every prose reply — nothing increments, so the
+# seeding provides no counter template. Rest of the framing is
+# identical to CANARY_RULE.
+CANARY_RULE_FIXED = (
+    "\n\nCanary rule: begin every reply that contains prose with a "
+    "line containing only `CANARY {tag}` — the same line every "
+    "time; it never changes and nothing increments. A reply that "
+    "is only tool calls, with no prose, carries no canary. Never "
+    "put the canary line in files, code, or commands — only as "
+    "the first line of your reply text.")
+
+
+def first_call_end(text):
+    """End index (exclusive) of the first complete tool call in a
+    reply, or None. The call must parse as a tool call; prose that
+    merely contains braces or a partial block does not count."""
+    start = text.find("```json")
+    if start != -1:
+        brace = text.find("{", start)
+        if brace == -1:
+            return None
+        fence = text.find("```", brace)
+        if fence == -1:
+            return None
+        return fence + 3
+    brace = text.find("{")
+    if brace == -1:
+        return None
+    try:
+        _, end = json.JSONDecoder().raw_decode(text[brace:])
+        return brace + end
+    except Exception:
+        return None
+
 
 def count_toks(text):
     n, _ = counting.count(text, "deepseek")
@@ -70,12 +105,20 @@ def count_toks(text):
 
 class Harness:
     def __init__(self, workdir, task, trace_path, budget, trace_id=None,
-                 canary_tag=None):
+                 canary_tag=None, verify_cmd=None, verify_timeout=300,
+                 canary_style="counter", truncate_first_call=False):
         self.workdir = os.path.abspath(workdir)
         self.task = task
+        self.verify_cmd = verify_cmd
+        self.verify_timeout = verify_timeout
         self.canary_tag = canary_tag
+        self.canary_style = canary_style
+        self.truncate_first_call = truncate_first_call
+        self.truncations = 0
         if canary_tag:
-            self.task = task.rstrip() + CANARY_RULE.format(tag=canary_tag)
+            rule = (CANARY_RULE_FIXED if canary_style == "fixed"
+                    else CANARY_RULE)
+            self.task = task.rstrip() + rule.format(tag=canary_tag)
         self.trace_path = trace_path
         self.budget = budget
         self.trace_id = trace_id or "live__django-docstrings::deepseek-chat::1M"
@@ -173,27 +216,77 @@ class Harness:
             pass
         return None
 
+    def verify(self):
+        """Harness-verified outcome (D2 fix): success is confirmed by
+        re-running the task's test suite in the workdir, never by the
+        agent's completion string. If verification cannot execute,
+        the outcome is 'unverifiable' — never success."""
+        if not self.verify_cmd:
+            return {"outcome": "unverifiable", "exit_code": None,
+                    "reason": "no verify command configured",
+                    "cmd": None, "output_tail": ""}
+        try:
+            p = subprocess.run(self.verify_cmd, shell=True,
+                               cwd=self.workdir, capture_output=True,
+                               text=True, timeout=self.verify_timeout)
+            tail = ((p.stdout or "") + (p.stderr or ""))[-500:]
+            return {"outcome": "verified_pass" if p.returncode == 0
+                    else "verified_fail",
+                    "exit_code": p.returncode, "reason": None,
+                    "cmd": self.verify_cmd, "output_tail": tail}
+        except subprocess.TimeoutExpired:
+            return {"outcome": "unverifiable", "exit_code": None,
+                    "reason": f"verify command timed out after "
+                              f"{self.verify_timeout}s",
+                    "cmd": self.verify_cmd, "output_tail": ""}
+        except Exception as e:
+            return {"outcome": "unverifiable", "exit_code": None,
+                    "reason": f"verify failed to execute: "
+                              f"{type(e).__name__}: {e}",
+                    "cmd": self.verify_cmd, "output_tail": ""}
+
     def run(self):
         if self.canary_tag:
             # Seed line: harness-written, system role, trace index 0
             # (canary-check spec v0.2 section 3c).
+            mode = ("counter=prose-replies"
+                    if self.canary_style == "counter"
+                    else "counter=none-fixed-line")
             self.log("system",
                      f"CANARY-SEED tag={self.canary_tag} anchor=start "
-                     "counter=prose-replies")
+                     f"{mode}")
         self.log("assistant", f"TASK START: {self.task}")
         steps = 0
+        end_reason = None
+        completion_claimed = False
         while True:
             msgs = self.context_messages()
             prompt_toks = sum(count_toks(m["content"]) for m in msgs)
             if self.input_tokens + prompt_toks > self.budget * HARD_CAP_MULT:
                 self.log("assistant", "BUDGET CAP REACHED — stopping.")
+                end_reason = "budget_cap"
                 break
             reply, used = self.api(msgs)
             self.input_tokens += used
             self.output_tokens += count_toks(reply)
+            if self.truncate_first_call:
+                # Prevention fix: a generation may not continue past
+                # its first complete tool call — anything after it
+                # (including fabricated tool output or a completion
+                # string) never enters the trace or the history.
+                end = first_call_end(reply)
+                if (end is not None and end < len(reply)
+                        and self.parse_tool(reply[:end])):
+                    reply = reply[:end]
+                    self.truncations += 1
             self.log("assistant", reply)
             steps += 1
             if "TASK COMPLETE" in reply:
+                # The completion string is an EVENT, not an outcome:
+                # the run ends (end-and-score), and verify() decides
+                # what gets recorded.
+                completion_claimed = True
+                end_reason = "completion_claimed"
                 break
             parsed = self.parse_tool(reply)
             if not parsed:
@@ -206,13 +299,22 @@ class Harness:
                 self.refresh_summary()
             if self.input_tokens >= self.budget:
                 self.log("assistant", "TOKEN BUDGET REACHED — stopping.")
+                end_reason = "token_budget"
                 break
         self.fh.close()
+        verification = self.verify()
         return {
             "steps": steps, "trace_steps": self.step_no,
             "input_tokens_local": self.input_tokens,
             "billed_in": self.billed_in, "billed_out": self.billed_out,
             "canary_tag": self.canary_tag,
+            "canary_style": self.canary_style if self.canary_tag
+            else None,
+            "truncation": {"enabled": self.truncate_first_call,
+                           "applied": self.truncations},
+            "end_reason": end_reason,
+            "completion_claimed": completion_claimed,
+            "verification": verification,
         }
 
 
@@ -225,13 +327,38 @@ def main():
     ap.add_argument("--trace-id", default=None)
     ap.add_argument("--canary", action="store_true",
                     help="seed this run with a canary (random 6-hex tag)")
+    ap.add_argument("--canary-fixed", default=None, metavar="TAG",
+                    help="seed with a fixed-tag canary: the same "
+                         "canary line on every prose reply, no "
+                         "counter (stage-1b variant)")
+    ap.add_argument("--truncate-first-call", action="store_true",
+                    help="prevention fix: cut each reply at its "
+                         "first complete tool call (default OFF; "
+                         "comparison runs keep it off)")
+    ap.add_argument("--verify-cmd", default=None,
+                    help="shell command re-run in the workdir when the "
+                         "run ends; its exit code decides the recorded "
+                         "outcome (0 = verified_pass). Without it the "
+                         "outcome is 'unverifiable' — a completion "
+                         "string alone never records success.")
+    ap.add_argument("--verify-timeout", type=int, default=300)
     a = ap.parse_args()
     task = open(a.task_file).read()
     tag = secrets.token_hex(3) if a.canary else None
+    style = "counter"
+    if a.canary_fixed:
+        tag = a.canary_fixed
+        style = "fixed"
     h = Harness(a.workdir, task, a.trace, a.budget, trace_id=a.trace_id,
-                canary_tag=tag)
+                canary_tag=tag, canary_style=style,
+                truncate_first_call=a.truncate_first_call,
+                verify_cmd=a.verify_cmd,
+                verify_timeout=a.verify_timeout)
     stats = h.run()
     print(json.dumps(stats, indent=1))
+    print(f"VERIFIED OUTCOME: {stats['verification']['outcome']} "
+          f"(end_reason={stats['end_reason']}, "
+          f"completion_claimed={stats['completion_claimed']})")
     # deepseek-chat off-peak $0.27/M in, $1.10/M out (standard sheet)
     cost = stats["billed_in"] / 1e6 * 0.27 + stats["billed_out"] / 1e6 * 1.10
     print(f"approx billed: ${cost:.4f}")
