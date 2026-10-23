@@ -25,6 +25,7 @@ import time
 
 from . import api_log as api_log_mod
 from . import detectors, pricing, receipt as receipt_mod, report
+from .detectors import unverified_final_state as ufs_mod
 from . import fixes as fixlib
 from .adapters import jsonl as jsonl_adapter
 from .adapters import langfuse as langfuse_adapter
@@ -135,6 +136,7 @@ def main(argv=None):
     findings_by_trace = {}
     risk = {"assessed": True, "reason": "", "writes_checked": 0,
             "flagged": 0, "ledger": []}
+    ufs_infos = []
     wd_text = None
     if args.workdir_diff:
         with open(args.workdir_diff, encoding="utf-8") as f:
@@ -150,11 +152,15 @@ def main(argv=None):
         if not br["assessed"]:
             risk["assessed"] = False
             risk["reason"] = br["reason"]
+        uf, ui = ufs_mod.assess_and_flag(t)
+        findings_by_trace[t.trace_id].extend(uf)
+        ufs_infos.append(ui)
+    ufs = ufs_mod.aggregate(ufs_infos)
 
     rep = report.build(traces, findings_by_trace, args.provider,
                        args.framework, api_log_records=api_records,
                        sheets=sheets, include_total_bill=args.total_bill,
-                       risk=risk)
+                       risk=risk, ufs=ufs)
     rep["audit_wall_seconds"] = time.perf_counter() - t0
 
     if args.receipt:

@@ -26,7 +26,7 @@ from . import fixes as fixlib
 
 def build(traces, findings_by_trace, provider, framework="generic",
           api_log_records=None, sheets=None, include_total_bill=False,
-          audit_wall_seconds=None, risk=None):
+          audit_wall_seconds=None, risk=None, ufs=None):
     sheets = sheets or pricing.SHEETS
     sheet = sheets.get(provider)
     total_input_tokens = 0
@@ -127,6 +127,7 @@ def build(traces, findings_by_trace, provider, framework="generic",
         "by_detector": by_detector,
         "findings": findings,
         "risk": risk,
+        "ufs": ufs,
         "framework": framework,
         "_sheets": sheets,  # internal: per-finding dollar pricing; stripped from JSON output
         "labels": [
@@ -199,11 +200,19 @@ def to_markdown(rep, diff=None):
     risk = rep.get("risk")
     if risk is not None:
         if risk.get("assessed"):
-            L.append(f"- Risk flags: **{risk['writes_checked']} writes "
-                     f"checked, {risk['flagged']} flagged.** "
-                     f"(blind-edit check — risk, not waste; never priced)")
+            L.append(f"- Blind-edit risk flags: **{risk['writes_checked']} "
+                     f"writes checked, {risk['flagged']} flagged.** "
+                     f"(risk, not waste; never priced)")
         else:
-            L.append(f"- Risk flags: {risk.get('reason', 'read-coverage could not be assessed')}")
+            L.append(f"- Blind-edit risk flags: {risk.get('reason', 'read-coverage could not be assessed')}")
+    ufs = rep.get("ufs")
+    if ufs is not None:
+        fl = ufs["flags"]
+        L.append(f"- Risk flags: **{ufs['traces_checked']} traces checked; "
+                 f"F1 {fl['F1']}, F2 {fl['F2']}, F3 {fl['F3']} "
+                 f"(F3a {fl['F3a']}), F4 {fl['F4']}** "
+                 f"(unverified final state — risk, not waste; never "
+                 f"priced; coverage in the risk section below)")
     L.append("")
     L.append("## Findings by class")
     L.append("")
@@ -234,10 +243,14 @@ def to_markdown(rep, diff=None):
     L.append("")
     risk_findings = [f for f in rep["findings"]
                      if f.detector == "blind_edit"]
-    if risk_findings:
-        from .detectors.blind_edit import DEFINITION
+    ufs_findings = [f for f in rep["findings"]
+                    if f.detector == "unverified_final_state"]
+    ufs = rep.get("ufs")
+    if risk_findings or ufs is not None:
         L.append("## Risk flags (not priced)")
         L.append("")
+    if risk_findings:
+        from .detectors.blind_edit import DEFINITION
         L.append(f"_{DEFINITION}. Risk flags carry no dollar figure: a "
                  f"blind edit that works costs no tokens — its cost is "
                  f"damage when it doesn't._")
@@ -246,6 +259,42 @@ def to_markdown(rep, diff=None):
             L.append(f"- **[blind_edit]** {f.trace_id} step {f.step_idx}: "
                      f"{f.summary}")
         L.append("")
+    if ufs is not None:
+        from .detectors.unverified_final_state import DEFINITION as UFS_DEF
+        cov = ufs["coverage"]
+        v = cov["verdicts"]
+        L.append("### Unverified final state")
+        L.append("")
+        L.append(f"_{UFS_DEF}. Flags are stated as unverified final "
+                 f"states, never as task failures or misconduct._")
+        L.append("")
+        L.append(f"- Coverage: {cov['traces']} traces · "
+                 f"{cov['commands']:,} commands · {cov['test_runs']:,} "
+                 f"test runs (PASS {v['PASS']:,}, FAIL {v['FAIL']:,}, "
+                 f"UNKNOWN {v['UNKNOWN']:,}) · {cov['edits']:,} edits · "
+                 f"{cov['unclassified']:,} unclassified commands · "
+                 f"{cov['no_commands']} traces with no extractable "
+                 f"commands")
+        L.append(f"- Informational: {ufs['info_test_edits']} edit(s) to "
+                 f"agent-created test files (counted, never flagged)")
+        for name in ("F1", "F2", "F3"):
+            by = ufs["by_end_type"].get(name) or {}
+            if ufs["flags"][name]:
+                parts = ", ".join(f"{k} {by.get(k, 0)}" for k in
+                                  ("submitted", "claimed-complete",
+                                   "exhausted"))
+                L.append(f"- {name} by end type: {parts}")
+        nco = {k: c for k, c in ufs["non_code_only"].items() if c}
+        if nco:
+            parts = ", ".join(f"{k} {nco[k]}" for k in sorted(nco))
+            L.append(f"- Flags whose only post-verification edits are "
+                     f"non-code files: {parts}")
+        L.append("")
+        for f in ufs_findings:
+            L.append(f"- **[unverified_final_state]** {f.trace_id} "
+                     f"step {f.step_idx}: {f.summary}")
+        if ufs_findings:
+            L.append("")
     L.append("## Recommended fixes")
     L.append("")
     seen = []
@@ -262,7 +311,8 @@ def to_markdown(rep, diff=None):
         L.append(f"```python\n{fix['snippet']}\n```")
         L.append("")
     unmeas = [f for f in rep["findings"]
-              if not f.measurable and f.detector != "blind_edit"]
+              if not f.measurable and f.detector not in
+              ("blind_edit", "unverified_final_state")]
     if unmeas:
         L.append("## Needs your API logs (not measurable from traces)")
         L.append("")
