@@ -184,6 +184,38 @@ def cap_observation(text):
         "llamaindex": "# LlamaIndex: same.",
         "openai_agents": "# OpenAI Agents SDK: same.",
     },
+    "dead_context": {
+        "title": "Stub view results the agent never references again",
+        "safety": "NOT replay-tested — apply as a recoverable stub, not a "
+                  "drop: the stub keeps a hash plus the file's symbol "
+                  "index, so the content can be re-fetched on demand. "
+                  "Measure before/after on your own traces; the "
+                  "detector reports a lower bound, and implicit use "
+                  "(content the model acts on without naming) is real "
+                  "use the detector cannot see.",
+        "generic": '''\
+# In your agent loop, track which tool results get referenced by later
+# tool calls (path, symbol, or edit). When a file view has gone N turns
+# without a single downstream reference, replace it in history with a
+# stub instead of re-sending the full content on every call:
+import hashlib
+
+def dead_context_stub(path, view_text, symbol_index):
+    h = hashlib.sha256(view_text.encode()).hexdigest()
+    return (f"[view of {path} stubbed: never referenced downstream · "
+            f"sha {h[:8]} · symbols: {', '.join(symbol_index) or 'none'} · "
+            f"re-fetch on demand]")
+
+# DCA-side: price unreferenced segments punitively — a segment with no
+# downstream reference after N turns gets the highest BT rate in the
+# budget, so the assembler drops it before anything the agent still
+# uses. Only stub after the grace window (N turns), never the view the
+# agent is currently working from.
+''',
+        "langchain": "# LangChain: stub in the agent's message history via a callback on tool end; see generic guidance.",
+        "llamaindex": "# LlamaIndex: same — trim in a step post-hook; see generic guidance.",
+        "openai_agents": "# OpenAI Agents SDK: same — rewrite in RunHooks.on_tool_end; see generic guidance.",
+    },
 }
 
 

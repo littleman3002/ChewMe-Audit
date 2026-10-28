@@ -80,8 +80,10 @@ Full report, traces, and provenance: `traces/worked_example/`.
 
 - **What it finds:** repeated identical tool calls (usually agents stuck
   in error loops), near-duplicate re-sends (full file re-views after
-  one-line edits), oversized tool outputs nothing later references, and
-  pretty-printed JSON. Each finding names the exact call.
+  one-line edits), oversized tool outputs nothing later references,
+  pretty-printed JSON, and dead context — files the agent viewed once
+  and never referenced again downstream (no later path, symbol, edit,
+  or patch use). Each finding names the exact call.
 - **What it can't see from trace exports:** real cache hit/miss behavior
   and reasoning-token overspend need your provider API logs. The report
   says so explicitly instead of guessing.

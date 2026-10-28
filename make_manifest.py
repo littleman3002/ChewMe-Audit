@@ -12,8 +12,22 @@ SRC = "/home/hatch/workspace/chewme-audit"
 EXCLUDE_DIRS = {"__pycache__", "build", ".pytest_cache"}
 EXCLUDE_SUFFIXES = (".pyc", ".egg-info")
 
+# v3 is implemented but NOT validated and NOT in the v2 release:
+# keep the files in the local tree, keep them out of the pushed tree.
+# The calibration pair is generated data, not committed (see
+# traces/calibration_1M/PROVENANCE.md): generate.py regenerates it
+# byte-identically in ~3s, so it never belongs in a push.
+EXCLUDE_FILES = {
+    "chewme_audit/detectors/dead_context_v3.py",
+    "tests/test_dead_context_v3.py",
+    "traces/calibration_1M/before.jsonl",
+    "traces/calibration_1M/after.jsonl",
+}
+
 
 def excluded(rel):
+    if rel in EXCLUDE_FILES:
+        return True
     parts = rel.split(os.sep)
     if any(p in EXCLUDE_DIRS for p in parts):
         return True

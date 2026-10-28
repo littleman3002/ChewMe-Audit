@@ -4,15 +4,32 @@ import sys
 import traceback
 
 import test_api_log
+import test_blind_edit
+import test_claude_code
 import test_cli
-import test_pricing
-import test_diff
-import test_detectors
+import test_coverage
 import test_cross_trace
+import test_dead_context
+try:
+    import test_dead_context_v3
+except ImportError:
+    test_dead_context_v3 = None
+import test_detectors
+import test_diff
+import test_fixes
+import test_litellm
+import test_pricing
+import test_unverified_final_state
 
 passed = failed = 0
-for mod in (test_detectors, test_api_log, test_pricing, test_diff, test_cli,
-            test_cross_trace):
+_modules = [test_detectors, test_api_log, test_pricing, test_diff, test_cli,
+            test_cross_trace, test_blind_edit, test_unverified_final_state,
+            test_dead_context, test_litellm,
+            test_coverage, test_claude_code,
+            test_fixes]
+if test_dead_context_v3 is not None:
+    _modules.insert(9, test_dead_context_v3)  # after test_dead_context
+for mod in _modules:
     for name in sorted(dir(mod)):
         if not name.startswith("test_"):
             continue
