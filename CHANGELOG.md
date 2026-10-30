@@ -57,6 +57,7 @@
 - **Think steps:** evidence legs read `think`-step text as if it were
   tool-call arguments; 15/2,252 live files flip to dead with think
   steps excluded. Function-local imports are invisible to E4.
+- **Later-slice misses (disclosed 2026-10-30):** Since release, a later validation slice confirmed four misses that v2 calls live but that weren't used: grep-only evidence, same-name symbol collision, reference-view without reuse, and agent-created temp files. The published 0-miss result stands for its own 499-trace sample. The true miss rate on new traces is likely above zero.
 - These are the v3 design items (`dead-context-v3-design.md`); v3 was
   implemented 2026-10-28, is not validated, is not wired into
   `run_all`, and is not in this release.
