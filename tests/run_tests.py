@@ -10,6 +10,8 @@ import test_cli
 import test_coverage
 import test_cross_trace
 import test_dead_context
+import test_dead_context_v4_successor2
+import test_push_measurable_guard
 try:
     import test_dead_context_v3
 except ImportError:
@@ -26,7 +28,8 @@ _modules = [test_detectors, test_api_log, test_pricing, test_diff, test_cli,
             test_cross_trace, test_blind_edit, test_unverified_final_state,
             test_dead_context, test_litellm,
             test_coverage, test_claude_code,
-            test_fixes]
+            test_fixes, test_dead_context_v4_successor2,
+            test_push_measurable_guard]
 if test_dead_context_v3 is not None:
     _modules.insert(9, test_dead_context_v3)  # after test_dead_context
 for mod in _modules:
